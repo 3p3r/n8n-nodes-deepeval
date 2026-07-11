@@ -8,6 +8,7 @@ n8n community evaluation node powered by the deepeval framework.
     - [Required N8N Nodes](#required-n8n-nodes)
     - [Optional Dashboard](#optional-dashboard)
   - [Available Nodes](#available-nodes)
+    - [n8n → DeepEval field mapping](#n8n--deepeval-field-mapping)
     - [DeepEval Trigger](#deepeval-trigger)
       - [Sources](#sources)
     - [DeepEval Metrics](#deepeval-metrics)
@@ -76,7 +77,37 @@ The dashboard injects itself into the N8N frontend. Evaluation views are auto-ge
 
 ## Available Nodes
 
-Metric nodes mirror the [DeepEval Eval Metrics](https://deepeval.com/docs/metrics-introduction) sidebar: **Custom**, **Agentic**, **Multi-Turn**, **Safety**, **Others**, and **Community** (MCP, Images, and RAG are not included). Each metric node wires into n8n in one ergonomic way: **Chat Trigger** for conversations, **AI Agent** for agent runs, or item fields (`input`, `actualOutput`, …) for evaluation data. LLM-judge metrics also accept a **Language Model** connection — the same n8n AI model sub-nodes used by AI Agent (OpenAI, Anthropic, and so on). Remaining DeepEval constructor options (`threshold`, `criteria`, allowlists, and so on) appear as **Config** on the node UI. Every metric node emits the same output shape: `score`, `reason`, `success`.
+Metric nodes cover the [DeepEval Eval Metrics](https://deepeval.com/docs/metrics-introduction) catalog, grouped as **Custom**, **Agentic**, **Multi-Turn**, **Safety**, **Others**, and **Community** (MCP, Images, and RAG are not included).
+
+Wiring follows normal n8n data flow:
+
+- **Main connection** — evaluation data arrives as item fields from upstream nodes. Connect **AI Agent** (or any node that produced the run) on main for agentic metrics; enable **Return Intermediate Steps** so `output` and `intermediateSteps` are available. Single-turn metrics use fields such as `input`, `actualOutput`, `context`, and `retrievalContext`. See [n8n → DeepEval field mapping](#n8n--deepeval-field-mapping) for how these map into DeepEval test cases and traces.
+- **Language Model sub-node** — LLM-judge metrics accept an `aiLanguageModel` connection (the same OpenAI, Anthropic, and related sub-nodes used by AI Agent). AI Agent and Chat Trigger are **not** sub-nodes; only the judge model uses that port.
+- **Memory sub-node** — conversational and turn-based metrics **require** `aiMemory` (Simple Memory, Postgres Chat Memory, and related memory sub-nodes). Connect the **same Memory** used by AI Agent; the metric reads chat history and builds DeepEval `turns` internally.
+
+Remaining DeepEval constructor options (`threshold`, `criteria`, allowlists, and so on) appear as **Config** on the node UI. Every metric node emits the same output shape: `score`, `reason`, `success`. Most metrics pass when `score >= threshold`; lower-is-better safety metrics (Bias, Toxicity, Hallucination, Misuse) pass when `score <= threshold` — each metric section documents its direction.
+
+### n8n → DeepEval field mapping
+
+Metric nodes accept n8n item fields on the **main** connection and/or special sub-node connections, then map them internally before calling DeepEval. Canvas wiring: main data in for agentic and single-turn metrics; **Memory** sub-node (required) for conversational metrics; **Language Model** sub-node for LLM judges.
+
+| Source | DeepEval field | Notes |
+| --- | --- | --- |
+| `output` (main) | `actual_output` | AI Agent final response |
+| `input` (main) | `input` | User prompt or golden input |
+| `actualOutput` (main) | `actual_output` | Explicit field name when set upstream |
+| `intermediateSteps` (main) | `tools_called`, synthetic trace | AI Agent with **Return Intermediate Steps** enabled |
+| `expectedTools` (main) | `expected_tools` | Trigger column mapping or upstream field |
+| `aiMemory` (sub-node) | `turns` (`ConversationalTestCase`) | **Required** for conversational / turn-based metrics; built by memory adapter |
+| `context`, `retrievalContext` (main) | `context`, `retrieval_context` | Grounding / RAG metrics |
+
+**Conversational metrics** — Conversational G-Eval, Conversational DAG, and all Multi-Turn metrics read conversation history **only** from the `aiMemory` sub-node. Connect the same Memory instance your AI Agent uses. No `turns` field on main.
+
+**Trace-dependent metrics** — Task Completion, Step Efficiency, Plan Adherence, Plan Quality, and Agent Loop Detection analyze an agent execution trace in DeepEval (normally from `@observe` tracing). In n8n, the metric builds a **synthetic trace** from `intermediateSteps` when native tracing is unavailable. If intermediate steps are missing when required, the metric errors with a clear message.
+
+**Goal Accuracy and Tool Use** — `turns` come from Memory. Connect **AI Agent** on main (with **Return Intermediate Steps**) to enrich relevant turns with `tools_called` from `intermediateSteps`.
+
+**Deterministic agent metrics** — Argument Correctness, Tool Correctness, and Tool Permission map `intermediateSteps` → `tools_called` directly (plus `input` and `expected_tools` where applicable).
 
 ### DeepEval Trigger
 
@@ -173,11 +204,13 @@ G-Eval adapted for full conversations: scores the entire dialogue against custom
 - `verboseMode` — print intermediate steps to console
 
 ```text
-chatTrigger ───────┐
-aiLanguageModel ───┼── [ Conversational G-Eval ] ──┬── score
-                   │                               ├── reason
-                   │                               └── success
+aiMemory ────────────┐
+aiLanguageModel ─────┼── [ Conversational G-Eval ] ──┬── score
+                     │                               ├── reason
+                     │                               └── success
 ```
+
+Connect the same Memory as AI Agent.
 
 ##### [Conversational DAG](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28custom%29/metrics-conversational-dag.mdx)
 
@@ -194,15 +227,17 @@ DAG adapted for multi-turn evaluation: deterministic decision trees over convers
 - `verboseMode` — log each node verdict
 
 ```text
-chatTrigger ───────┐
-aiLanguageModel ───┼── [ Conversational DAG ] ───┬── score
-                   │                             ├── reason
-                   │                             └── success
+aiMemory ────────────┐
+aiLanguageModel ─────┼── [ Conversational DAG ] ──┬── score
+                     │                            ├── reason
+                     │                            └── success
 ```
+
+Connect the same Memory as AI Agent.
 
 #### Agentic
 
-Agentic metrics evaluate LLM agent execution. Wire the **AI Agent** node as input; the metric derives trace, tool calls, and outputs from the agent run.
+Agentic metrics evaluate LLM agent execution. Connect **AI Agent** (or an equivalent upstream node) on the **main** connection; enable **Return Intermediate Steps**. The metric maps n8n fields to DeepEval test cases and traces (see [n8n → DeepEval field mapping](#n8n--deepeval-field-mapping)). Attach a **Language Model** sub-node when the metric needs an LLM judge.
 
 ##### [Task Completion](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28agentic%29/metrics-task-completion.mdx)
 
@@ -218,11 +253,14 @@ Judges whether the agent accomplished the task by aligning the extracted outcome
 - `verboseMode` — print intermediate steps to console
 
 ```text
-aiAgent ───────────┐
-aiLanguageModel ───┼── [ Task Completion ] ───┬── score
-                   │                          ├── reason
-                   │                          └── success
+input ─────────────┐
+output ────────────┤
+intermediateSteps ─┼── [ Task Completion ] ───┬── score
+aiLanguageModel ───┘                          ├── reason
+                                              └── success
 ```
+
+Connect **AI Agent** on main (with **Return Intermediate Steps**). Maps to DeepEval `input`, `actual_output`, and a synthetic trace from `intermediateSteps`. DeepEval infers `task` from the trace when not set in Config.
 
 ##### [Step Efficiency](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28agentic%29/metrics-step-efficiency.mdx)
 
@@ -237,11 +275,14 @@ Measures how efficiently the agent completed the task, penalizing unnecessary st
 - `verboseMode` — print intermediate steps to console
 
 ```text
-aiAgent ───────────┐
-aiLanguageModel ───┼── [ Step Efficiency ] ───┬── score
-                   │                          ├── reason
-                   │                          └── success
+input ─────────────┐
+output ────────────┤
+intermediateSteps ─┼── [ Step Efficiency ] ───┬── score
+aiLanguageModel ───┘                          ├── reason
+                                              └── success
 ```
+
+Trace-only in DeepEval. Requires synthetic trace from `intermediateSteps`; fails clearly if intermediate steps are absent.
 
 ##### [Argument Correctness](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28agentic%29/metrics-argument-correctness.mdx)
 
@@ -256,11 +297,14 @@ Checks whether each tool call received correct arguments for the user request (r
 - `verboseMode` — print intermediate steps to console
 
 ```text
-aiAgent ───────────┐
-aiLanguageModel ───┼── [ Argument Correctness ] ───┬── score
-                   │                               ├── reason
-                   │                               └── success
+input ─────────────┐
+output ────────────┤
+intermediateSteps ─┼── [ Argument Correctness ] ───┬── score
+aiLanguageModel ───┘                               ├── reason
+                                                   └── success
 ```
+
+Maps `input` → DeepEval `input`, `output` → `actual_output`, `intermediateSteps` → `tools_called`.
 
 ##### [Tool Correctness](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28agentic%29/metrics-tool-correctness.mdx)
 
@@ -279,12 +323,15 @@ Compares tools the agent called against expected tools (selection, order, and op
 - `verboseMode` — print intermediate steps to console
 
 ```text
-aiAgent ───────────┐
-expectedTools ─────┤
-aiLanguageModel ───┼── [ Tool Correctness ] ──┬── score
-                   │                          ├── reason
-                   │                          └── success
+input ─────────────┐
+output ────────────┤
+intermediateSteps ─┤
+expectedTools ─────┼── [ Tool Correctness ] ──┬── score
+aiLanguageModel ───┘                          ├── reason
+                                              └── success
 ```
+
+Maps `input`, `intermediateSteps` → `tools_called`, and `expectedTools` → `expected_tools`. `expectedTools` may come from the Trigger column mapping or another upstream field.
 
 ##### [Plan Adherence](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28agentic%29/metrics-plan-adherence.mdx)
 
@@ -299,11 +346,14 @@ Scores how closely the agent's execution followed the plan inferred from its rea
 - `verboseMode` — print intermediate steps to console
 
 ```text
-aiAgent ───────────┐
-aiLanguageModel ───┼── [ Plan Adherence ] ──┬── score
-                   │                        ├── reason
-                   │                        └── success
+input ─────────────┐
+output ────────────┤
+intermediateSteps ─┼── [ Plan Adherence ] ──┬── score
+aiLanguageModel ───┘                        ├── reason
+                                            └── success
 ```
+
+Trace-only. Synthetic trace from `intermediateSteps`. When DeepEval finds no plan in the trace, score defaults to `1`.
 
 ##### [Plan Quality](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28agentic%29/metrics-plan-quality.mdx)
 
@@ -318,15 +368,18 @@ Scores the quality of the plan itself (task vs. plan alignment), independent of 
 - `verboseMode` — print intermediate steps to console
 
 ```text
-aiAgent ───────────┐
-aiLanguageModel ───┼── [ Plan Quality ] ──┬── score
-                   │                      ├── reason
-                   │                      └── success
+input ─────────────┐
+output ────────────┤
+intermediateSteps ─┼── [ Plan Quality ] ──┬── score
+aiLanguageModel ───┘                      ├── reason
+                                          └── success
 ```
+
+Trace-only. Synthetic trace from `intermediateSteps`. When DeepEval finds no plan in the trace, score defaults to `1`.
 
 #### Multi-Turn
 
-Multi-turn metrics evaluate chatbots over a full conversation. Wire the **Chat Trigger** node as input; metrics map its session to DeepEval `turns`. **Goal Accuracy** and **Tool Use** also require the **AI Agent** node for agent tool and planning context.
+Multi-turn metrics evaluate chatbots over a full conversation. Each metric **requires** an `aiMemory` sub-node — connect the **same Memory** used by AI Agent. **Goal Accuracy** and **Tool Use** also connect **AI Agent** on main (with **Return Intermediate Steps**) to enrich turns with tool-call data from `intermediateSteps`.
 
 ##### [Turn Relevancy](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28multi-turn%29/metrics-turn-relevancy.mdx)
 
@@ -342,11 +395,13 @@ Checks that each assistant reply stays relevant given prior turns in a sliding w
 - `verboseMode` — print intermediate steps to console
 
 ```text
-chatTrigger ───────┐
-aiLanguageModel ───┼── [ Turn Relevancy ] ──┬── score
-                   │                        ├── reason
-                   │                        └── success
+aiMemory ────────────┐
+aiLanguageModel ─────┼── [ Turn Relevancy ] ──┬── score
+                     │                        ├── reason
+                     │                        └── success
 ```
+
+Connect the same Memory as AI Agent.
 
 ##### [Role Adherence](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28multi-turn%29/metrics-role-adherence.mdx)
 
@@ -361,12 +416,15 @@ Measures whether the assistant stayed in character across every turn against a d
 - `verboseMode` — print intermediate steps to console
 
 ```text
-chatTrigger ───────┐
-chatbotRole ───────┤
-aiLanguageModel ───┼── [ Role Adherence ] ──┬── score
-                   │                        ├── reason
-                   │                        └── success
+aiMemory ────────────┐
+aiLanguageModel ─────┼── [ Role Adherence ] ──┬── score
+                     │                        ├── reason
+                     │                        └── success
 ```
+
+Connect the same Memory as AI Agent.
+
+`chatbotRole` is set in Config or supplied as an item field.
 
 ##### [Knowledge Retention](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28multi-turn%29/metrics-knowledge-retention.mdx)
 
@@ -381,11 +439,13 @@ Detects when the bot forgets facts the user already provided earlier in the conv
 - `verboseMode` — print intermediate steps to console
 
 ```text
-chatTrigger ───────┐
-aiLanguageModel ───┼── [ Knowledge Retention ] ───┬── score
-                   │                              ├── reason
-                   │                              └── success
+aiMemory ────────────┐
+aiLanguageModel ─────┼── [ Knowledge Retention ] ──┬── score
+                     │                             ├── reason
+                     │                             └── success
 ```
+
+Connect the same Memory as AI Agent.
 
 ##### [Conversation Completeness](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28multi-turn%29/metrics-conversation-completeness.mdx)
 
@@ -401,11 +461,13 @@ Checks whether all user intentions raised in the dialogue were satisfied by the 
 - `verboseMode` — print intermediate steps to console
 
 ```text
-chatTrigger ───────┐
-aiLanguageModel ───┼── [ Conversation Completeness ] ──┬── score
-                   │                                   ├── reason
-                   │                                   └── success
+aiMemory ────────────┐
+aiLanguageModel ─────┼── [ Conversation Completeness ] ──┬── score
+                     │                                   ├── reason
+                     │                                   └── success
 ```
+
+Connect the same Memory as AI Agent.
 
 ##### [Goal Accuracy](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28multi-turn%29/metrics-goal-accuracy.mdx)
 
@@ -420,12 +482,15 @@ Evaluates whether the agent reached the user's goal and how well its plan and st
 - `verboseMode` — print intermediate steps to console
 
 ```text
-chatTrigger ───────┐
-aiAgent ───────────┤
-aiLanguageModel ───┼── [ Goal Accuracy ] ──┬── score
-                   │                       ├── reason
-                   │                       └── success
+aiMemory ────────────┐
+aiLanguageModel ─────┼── [ Goal Accuracy ] ──┬── score
+                     │                       ├── reason
+                     │                       └── success
 ```
+
+Connect the same Memory as AI Agent.
+
+Also connect **AI Agent** on main (with **Return Intermediate Steps**) to enrich turns with `tools_called` from `intermediateSteps`.
 
 ##### [Tool Use](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28multi-turn%29/metrics-tool-use.mdx)
 
@@ -441,12 +506,15 @@ Scores tool selection and argument correctness per interaction against available
 - `verboseMode` — print intermediate steps to console
 
 ```text
-chatTrigger ───────┐
-aiAgent ───────────┤
-aiLanguageModel ───┼── [ Tool Use ] ──┬── score
-                   │                  ├── reason
-                   │                  └── success
+aiMemory ────────────┐
+aiLanguageModel ─────┼── [ Tool Use ] ──┬── score
+                     │                  ├── reason
+                     │                  └── success
 ```
+
+Connect the same Memory as AI Agent.
+
+Also connect **AI Agent** on main (with **Return Intermediate Steps**) to enrich turns with `tools_called` from `intermediateSteps`. `availableTools` is required in Config.
 
 ##### [Topic Adherence](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28multi-turn%29/metrics-topic-adherence.mdx)
 
@@ -462,11 +530,13 @@ Penalizes answers to off-topic questions and rewards correct refusals when a que
 - `verboseMode` — print intermediate steps to console
 
 ```text
-chatTrigger ───────┐
-aiLanguageModel ───┼── [ Topic Adherence ] ──┬── score
-                   │                         ├── reason
-                   │                         └── success
+aiMemory ────────────┐
+aiLanguageModel ─────┼── [ Topic Adherence ] ──┬── score
+                     │                         ├── reason
+                     │                         └── success
 ```
+
+Connect the same Memory as AI Agent.
 
 ##### [Turn Faithfulness](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28multi-turn%29/metrics-turn-faithfulness.mdx)
 
@@ -484,11 +554,15 @@ Verifies assistant claims are grounded in `retrievalContext` attached to turns (
 - `verboseMode` — print intermediate steps to console
 
 ```text
-chatTrigger ───────┐
-aiLanguageModel ───┼── [ Turn Faithfulness ] ──┬── score
-                   │                           ├── reason
-                   │                           └── success
+aiMemory ────────────┐
+aiLanguageModel ─────┼── [ Turn Faithfulness ] ──┬── score
+                     │                           ├── reason
+                     │                           └── success
 ```
+
+Connect the same Memory as AI Agent.
+
+Per-turn `retrievalContext` may be set in Config or supplied on turns built from Memory.
 
 ##### [Turn Contextual Precision](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28multi-turn%29/metrics-turn-contextual-precision.mdx)
 
@@ -504,12 +578,15 @@ Measures whether relevant retrieval nodes are ranked above irrelevant ones per t
 - `verboseMode` — print intermediate steps to console
 
 ```text
-chatTrigger ───────┐
-expectedOutcome ───┤
-aiLanguageModel ───┼── [ Turn Contextual Precision ] ──┬── score
-                   │                                   ├── reason
-                   │                                   └── success
+aiMemory ────────────┐
+aiLanguageModel ─────┼── [ Turn Contextual Precision ] ──┬── score
+                     │                                   ├── reason
+                     │                                   └── success
 ```
+
+Connect the same Memory as AI Agent.
+
+`expectedOutcome` is Config or an item field.
 
 ##### [Turn Contextual Recall](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28multi-turn%29/metrics-turn-contextual-recall.mdx)
 
@@ -525,12 +602,15 @@ Checks whether retrieved context per turn contains enough information to support
 - `verboseMode` — print intermediate steps to console
 
 ```text
-chatTrigger ───────┐
-expectedOutcome ───┤
-aiLanguageModel ───┼── [ Turn Contextual Recall ] ──┬── score
-                   │                                ├── reason
-                   │                                └── success
+aiMemory ────────────┐
+aiLanguageModel ─────┼── [ Turn Contextual Recall ] ──┬── score
+                     │                                ├── reason
+                     │                                └── success
 ```
+
+Connect the same Memory as AI Agent.
+
+`expectedOutcome` is Config or an item field.
 
 ##### [Turn Contextual Relevancy](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28multi-turn%29/metrics-turn-contextual-relevancy.mdx)
 
@@ -546,15 +626,17 @@ Measures signal-to-noise in each turn's `retrievalContext` relative to the user'
 - `verboseMode` — print intermediate steps to console
 
 ```text
-chatTrigger ───────┐
-aiLanguageModel ───┼── [ Turn Contextual Relevancy ] ──┬── score
-                   │                                   ├── reason
-                   │                                   └── success
+aiMemory ────────────┐
+aiLanguageModel ─────┼── [ Turn Contextual Relevancy ] ──┬── score
+                     │                                   ├── reason
+                     │                                   └── success
 ```
+
+Connect the same Memory as AI Agent.
 
 #### Safety
 
-Safety metrics flag harmful or policy-violating outputs. Wire `input` and `actualOutput` from any upstream node (typically an LLM or AI Agent).
+Safety metrics flag harmful or policy-violating outputs. Supply `input` and `actualOutput` on the **main** connection from any upstream node (typically an LLM or AI Agent).
 
 ##### [Bias](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28safety%29/metrics-bias.mdx)
 
@@ -655,16 +737,18 @@ aiLanguageModel ───┘                     ├── reason
 
 ##### [Role Violation](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28safety%29/metrics-role-violation.mdx)
 
-Binary check for a single-turn output breaking the assigned role or persona (breaking character, policy violations, and so on).
+Binary check for a single-turn output breaking the assigned role or persona (breaking character, policy violations, and so on). Score is higher-is-safer: `1.0` when no violation, `0.0` when any violation is detected.
 
 **Config**
 
 - `role` (required) — expected persona (e.g. `helpful assistant`)
 - `threshold` — pass cutoff; `success` when `score >= threshold` (default `0.5`)
 - `includeReason` — whether to generate a human-readable `reason` (default `true`)
-- `strictMode` — binary 1/0 scoring; forces threshold to `0`
+- `strictMode` — binary 1/0 scoring; forces threshold to `1` (pass only on a perfect `1.0` score)
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — print intermediate steps to console
+
+Upstream DeepEval docs describe `strictMode` inconsistently (Bias-style “0 for perfection” vs higher-is-safer FAQ). This node follows higher-is-safer semantics and pins `strictMode` to threshold `1` accordingly.
 
 ```text
 input ─────────────┐
@@ -741,7 +825,7 @@ aiLanguageModel ───┘                       ├── reason
 
 #### Community
 
-Community metrics live in `deepeval.metrics.community` and are contributed extensions with a faster iteration cycle.
+Community metrics are contributed DeepEval extensions. **Citation Faithfulness** imports from `deepeval.metrics.community`. **Agent Loop Detection** and **Tool Permission** are grouped here for product navigation; with the pinned runtime ([deep-eval-web](https://github.com/3p3r/deep-eval-web) / deepeval `v4.0.7`), import paths may be `deepeval.metrics.community` or `deepeval.metrics` depending on the wheel build — the node resolves the correct class at runtime.
 
 ##### [Citation Faithfulness](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28community%29/metrics-citation-faithfulness.mdx)
 
@@ -780,10 +864,14 @@ Deterministic detection of infinite loops in an agent trace (tool repetition, re
 - `verboseMode` — print intermediate steps to console
 
 ```text
-aiAgent ──┼── [ Agent Loop Detection ] ──┬── score
-          │                              ├── reason
-          │                              └── success
+input ─────────────┐
+output ────────────┤
+intermediateSteps ─┼──► [ Agent Loop Detection ] ──┬── score
+                   │                               ├── reason
+                   │                               └── success
 ```
+
+Trace-only and deterministic. Maps `intermediateSteps` to a synthetic DeepEval trace. No Language Model sub-node. Fails clearly if intermediate steps are missing.
 
 ##### [Tool Permission](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28community%29/metrics-tool-permission.mdx)
 
@@ -799,10 +887,13 @@ Enforces least privilege: flags any tool call outside an allowlist or on a denyl
 - `verboseMode` — print intermediate steps to console
 
 ```text
-aiAgent ──┼── [ Tool Permission ] ──┬── score
-          │                         ├── reason
-          │                         └── success
+input ─────────────┐
+intermediateSteps ─┼──► [ Tool Permission ] ──┬── score
+                   │                          ├── reason
+                   │                          └── success
 ```
+
+Maps `intermediateSteps` → DeepEval `tools_called`. No Language Model sub-node. No `asyncMode` (deterministic, synchronous in DeepEval).
 
 ### DeepEval Aggregate
 
@@ -833,10 +924,25 @@ Aggregate writes evaluation results to the following sink types (configured on t
 
 #### Typical wiring
 
+**Batch eval** (dataset-driven):
+
 ```text
-[Chat / Webhook] ──┐
-                   ├──► [merge] ──► [AI under test] ──► branch on isEvalRun
-[DeepEval Trigger] ┘                                       │
-                                                           ├─ prod → downstream
-                                                           └─ eval → [metric…] ──► [DeepEval Aggregate] ──► sink
+[Data Tables | Sheets | Excel] ──► [ DeepEval Trigger ] ──┐
+                                                          ├──► [merge] ──► [AI Agent] ──► branch on isEvalRun
+[Chat / Webhook] ─────────────────────────────────────────┘                                 │
+                                                                                            ├─ prod → downstream
+                                                                                            └─ eval → [metric…] ──► [DeepEval Aggregate] ──► sink
 ```
+
+**Live chat eval** (conversational metrics — Memory required):
+
+```text
+[Chat Trigger] ──main──► [AI Agent] ──main──► [conversational metric…] ──► [DeepEval Aggregate] ──► sink
+
+[Simple Memory] ──ai_memory──► [AI Agent]
+              └─ai_memory──► [conversational metric…]
+
+[Judge Language Model] ──aiLanguageModel──► [conversational metric…]
+```
+
+Connect the **same Memory** sub-node to AI Agent and to each conversational / turn-based metric. Enable **Return Intermediate Steps** on AI Agent when using Goal Accuracy, Tool Use, or other metrics that enrich turns from `intermediateSteps`.
