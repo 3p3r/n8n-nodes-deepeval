@@ -9,6 +9,7 @@ n8n community evaluation node powered by the deepeval framework.
     - [Optional Dashboard](#optional-dashboard)
   - [Available Nodes](#available-nodes)
     - [DeepEval Trigger](#deepeval-trigger)
+      - [Sources](#sources)
     - [DeepEval Metrics](#deepeval-metrics)
       - [Custom](#custom)
         - [G-Eval](#g-eval)
@@ -50,15 +51,8 @@ n8n community evaluation node powered by the deepeval framework.
         - [Agent Loop Detection](#agent-loop-detection)
         - [Tool Permission](#tool-permission)
     - [DeepEval Aggregate](#deepeval-aggregate)
-  - [Sources and Sinks](#sources-and-sinks)
-    - [Available Data Sources](#available-data-sources)
-      - [Data Tables](#data-tables)
-      - [Google Sheets](#google-sheets)
-      - [Excel Sheets](#excel-sheets)
-    - [Available Data Sinks](#available-data-sinks)
-      - [Data Tables](#data-tables-1)
-      - [Google Sheets](#google-sheets-1)
-      - [Excel Sheets](#excel-sheets-1)
+      - [Sinks](#sinks)
+      - [Typical wiring](#typical-wiring)
 
 ## Synopsis
 
@@ -74,19 +68,43 @@ Offered as N8N community nodes, these are the core components that allow you to 
 
 ### Optional Dashboard
 
-Offered as N8N hooks for both the frontend and backend, this dashboard provides a user-friendly interface for managing and visualizing your DeepEval benchmarks. It allows you to monitor the performance of your models, view evaluation results, and configure evaluation parameters without needing to dive into the underlying code.
+Offered as N8N hooks for both the frontend and backend, this dashboard provides a user-friendly interface for managing and visualizing your DeepEval benchmarks. It runs a parallel database alongside n8n — every DeepEval node (Trigger, metrics, Aggregate) transparently records its runs there; no extra wiring is required for dashboard visibility.
 
-All nodes optionally communicate with the backend hook to record their workflow and evaluation results, which can then be visualized in the dashboard. The dashboard injects itself into the N8N frontend, providing a seamless experience for users who want to manage their DeepEval evaluations in a more interactive way.
+The dashboard injects itself into the N8N frontend. Evaluation views are auto-generated via Refine's [Inferencer](https://refine.dev/core/docs/packages/inferencer) package from the recorded run data.
 
-Individual views for evaluation results are inferred from sources and sinks and are visualized via Refine's [Inferencer](https://refine.dev/core/docs/packages/inferencer) package. Evaluations for the dashboard are recorded automatically and do not require any additional configuration. The aggregate node can be used to combine multiple evaluation results into a single view, providing a comprehensive overview of your model's performance across different metrics and data sources.
+**DeepEval Aggregate** is separate from the dashboard: it is the canvas mechanic for writing evaluation outcomes back **into n8n** (Data Tables, Google Sheets, Excel). Use Aggregate when you want workflow-visible rollup and dataset write-back; the dashboard captures runs in parallel regardless.
 
 ## Available Nodes
 
-Metric nodes mirror the [DeepEval Eval Metrics](https://deepeval.com/docs/metrics-introduction) sidebar: **Custom**, **Agentic**, **Multi-Turn**, **Safety**, **Others**, and **Community** (MCP, Images, and RAG are not included). Each metric node wires into n8n in one ergonomic way: **Chat Trigger** for conversations, **AI Agent** for agent runs, or item fields (`input`, `actualOutput`, …) for evaluation data. LLM-judge metrics also accept a **Language Model** connection — the same n8n AI model sub-nodes used by AI Agent (OpenAI, Anthropic, and so on). Remaining DeepEval constructor options (`threshold`, `criteria`, allowlists, and so on) appear as **Config** on the node UI.
+Metric nodes mirror the [DeepEval Eval Metrics](https://deepeval.com/docs/metrics-introduction) sidebar: **Custom**, **Agentic**, **Multi-Turn**, **Safety**, **Others**, and **Community** (MCP, Images, and RAG are not included). Each metric node wires into n8n in one ergonomic way: **Chat Trigger** for conversations, **AI Agent** for agent runs, or item fields (`input`, `actualOutput`, …) for evaluation data. LLM-judge metrics also accept a **Language Model** connection — the same n8n AI model sub-nodes used by AI Agent (OpenAI, Anthropic, and so on). Remaining DeepEval constructor options (`threshold`, `criteria`, allowlists, and so on) appear as **Config** on the node UI. Every metric node emits the same output shape: `score`, `reason`, `success`.
 
 ### DeepEval Trigger
 
-Starts an evaluation workflow and supplies the run context for downstream metric nodes.
+Starts an evaluation run by reading one dataset row per execution. Supplies test-case fields and run context for downstream metric nodes. Does not score; does not own Language Model or metric configuration.
+
+**Config**
+
+- `runName` — human label for the evaluation run
+- `source` — data source type (`dataTable`, `googleSheets`, `excelSheets`)
+- source-specific connection, document, sheet, or table selectors
+- `columnMapping` — map source columns → DeepEval fields (`input`, `expectedOutput`, `context`, `retrievalContext`, `expectedTools`, and so on)
+- `limitRows` — whether to cap how many rows are processed
+- `maxRows` — maximum rows when `limitRows` is enabled
+- `filters` — optional column=value filters on the dataset
+
+```text
+[Data Tables | Google Sheets | Excel] ──► [ DeepEval Trigger ] ──┬── input / expectedOutput / …
+                                                                 ├── evalContext (runId, runName, isEvalRun, rowId)
+                                                                 └── (one item per dataset row)
+```
+
+#### Sources
+
+Trigger reads evaluation datasets from the following source types (configured on the node, not separate nodes):
+
+- **Data Tables** — n8n [Data Tables](https://docs.n8n.io/build/work-with-data/data-tables); map columns to DeepEval fields
+- **Google Sheets** — spreadsheet document and sheet; filters and row limits supported
+- **Excel Sheets** — Excel file and sheet as dataset source
 
 ### DeepEval Metrics
 
@@ -788,20 +806,37 @@ aiAgent ──┼── [ Tool Permission ] ──┬── score
 
 ### DeepEval Aggregate
 
-Combines multiple metric results from a workflow into a single aggregated view for reporting and dashboard visualization.
+Fan-in recorder for the eval branch. Collects unified metric results from one or more metric nodes and writes evaluation outcomes back into n8n via the configured sink. Transparent dashboard recording still happens automatically on every node; Aggregate is the canvas mechanic for n8n-side persistence and workflow-visible rollup.
 
-## Sources and Sinks
+**Config**
 
-The primary way to read ground truth data and write evaluation results is through the builtin [N8N Data Tables](https://docs.n8n.io/build/work-with-data/data-tables) feature. Alternatively, additional sinks and sources can be added through the N8N node system, allowing for greater flexibility in how you manage your data.
+- `sink` — write target type (`dataTable`, `googleSheets`, `excelSheets`)
+- sink-specific target (table, spreadsheet, sheet) and write-back column mapping
+- `metrics` — which incoming metric nodes to include (`allConnected` or explicit list)
+- `passRule` — overall `success` rule (`allPass`, `anyFail`, and so on)
 
-### Available Data Sources
+```text
+metricA {score,reason,success} ──┐
+metricB {score,reason,success} ──┼── [ DeepEval Aggregate ] ──► sink (Data Tables | Sheets | Excel)
+metricN {score,reason,success} ──┘             │
+                                               ├── overall score / success
+                                               └── per-metric fields
+```
 
-#### Data Tables
-#### Google Sheets
-#### Excel Sheets
+#### Sinks
 
-### Available Data Sinks
+Aggregate writes evaluation results to the following sink types (configured on the node, not separate nodes):
 
-#### Data Tables
-#### Google Sheets
-#### Excel Sheets
+- **Data Tables** — write per-metric columns and overall rollup back to an n8n Data Table
+- **Google Sheets** — append or update evaluation result rows in a spreadsheet
+- **Excel Sheets** — write results back to an Excel sheet
+
+#### Typical wiring
+
+```text
+[Chat / Webhook] ──┐
+                   ├──► [merge] ──► [AI under test] ──► branch on isEvalRun
+[DeepEval Trigger] ┘                                       │
+                                                           ├─ prod → downstream
+                                                           └─ eval → [metric…] ──► [DeepEval Aggregate] ──► sink
+```
