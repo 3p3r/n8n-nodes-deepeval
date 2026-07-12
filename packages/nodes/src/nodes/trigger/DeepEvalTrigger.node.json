@@ -1,0 +1,14 @@
+{
+  "node": "n8n-nodes-deepeval.deepEvalTrigger",
+  "nodeVersion": "1.0",
+  "codexVersion": "1.0",
+  "categories": ["AI, LLM & Voice"],
+  "alias": ["DeepEval Benchmarking", "evaluation dataset", "benchmark trigger"],
+  "resources": {
+    "primaryDocumentation": [
+      {
+        "url": "https://github.com/3p3r/n8n-nodes-deepeval"
+      }
+    ]
+  }
+}

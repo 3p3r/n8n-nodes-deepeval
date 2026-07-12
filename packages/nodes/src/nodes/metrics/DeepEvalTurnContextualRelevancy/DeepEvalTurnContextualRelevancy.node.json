@@ -1,0 +1,19 @@
+{
+  "node": "n8n-nodes-deepeval.deepEvalTurnContextualRelevancy",
+  "nodeVersion": "1.0",
+  "codexVersion": "1.0",
+  "categories": ["AI, LLM & Voice"],
+  "alias": [
+    "DeepEval Benchmarking",
+    "evaluation",
+    "benchmark",
+    "DeepEval Turn Contextual Relevancy"
+  ],
+  "resources": {
+    "primaryDocumentation": [
+      {
+        "url": "https://github.com/3p3r/n8n-nodes-deepeval"
+      }
+    ]
+  }
+}

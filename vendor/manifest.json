@@ -1,0 +1,22 @@
+{
+  "deepeval": {
+    "version": "4.0.7",
+    "url": "https://github.com/confident-ai/deepeval/archive/refs/tags/v4.0.7.tar.gz",
+    "sha256": "84660cdd8b4691fc02e18dbfe822fa9a381b5da05c8fd6a7d1308d538d97c7f2"
+  },
+  "deepEvalWeb": {
+    "commit": "8dca1bfb1a6f3c4e45f135827b1a88f226171955",
+    "url": "https://github.com/3p3r/deep-eval-web/archive/8dca1bfb1a6f3c4e45f135827b1a88f226171955.tar.gz",
+    "sha256": "930a5b42c7620be8ac9d06e42a334b75fc0df065f3fced84911fa05a8303296a"
+  },
+  "overlays": {
+    "commit": "625814c0c7f3fe88abd2dd7cf96944b2b4d9ed68",
+    "url": "https://github.com/confident-ai/deepeval/archive/625814c0c7f3fe88abd2dd7cf96944b2b4d9ed68.tar.gz",
+    "sha256": "05a3cfa527be73985696fbd6d28877d2d683f7b373b63d468b45a555c72a872b",
+    "metrics": [
+      "CitationFaithfulnessMetric",
+      "AgentLoopDetectionMetric",
+      "ToolPermissionMetric"
+    ]
+  }
+}

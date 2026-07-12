@@ -1,0 +1,20 @@
+language: 'typescript'
+layer: 'library'
+
+tasks:
+  build:
+    command: 'npm run build'
+    deps:
+      - 'root:vendor'
+    inputs:
+      - 'src/**/*'
+      - 'assets/**/*'
+      - 'vite.config.ts'
+      - 'package.json'
+    outputs:
+      - 'dist'
+  typecheck:
+    command: 'npm run typecheck'
+    inputs:
+      - 'src/**/*'
+      - 'package.json'

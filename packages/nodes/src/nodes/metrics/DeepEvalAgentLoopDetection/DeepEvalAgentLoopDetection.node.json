@@ -1,0 +1,14 @@
+{
+  "node": "n8n-nodes-deepeval.deepEvalAgentLoopDetection",
+  "nodeVersion": "1.0",
+  "codexVersion": "1.0",
+  "categories": ["AI, LLM & Voice"],
+  "alias": ["DeepEval Benchmarking", "evaluation", "benchmark", "DeepEval Agent Loop Detection"],
+  "resources": {
+    "primaryDocumentation": [
+      {
+        "url": "https://github.com/3p3r/n8n-nodes-deepeval"
+      }
+    ]
+  }
+}

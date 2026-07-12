@@ -1,0 +1,14 @@
+{
+  "node": "n8n-nodes-deepeval.deepEvalToolPermission",
+  "nodeVersion": "1.0",
+  "codexVersion": "1.0",
+  "categories": ["AI, LLM & Voice"],
+  "alias": ["DeepEval Benchmarking", "evaluation", "benchmark", "DeepEval Tool Permission"],
+  "resources": {
+    "primaryDocumentation": [
+      {
+        "url": "https://github.com/3p3r/n8n-nodes-deepeval"
+      }
+    ]
+  }
+}

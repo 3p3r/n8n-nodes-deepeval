@@ -1,0 +1,24 @@
+language: 'typescript'
+layer: 'library'
+
+dependsOn:
+  - 'runtime'
+
+tasks:
+  build:
+    command: 'npm run build'
+    deps:
+      - 'root:generate'
+      - 'runtime:build'
+    inputs:
+      - 'src/**/*'
+      - 'examples/**/*'
+      - 'vite.config.mts'
+      - 'package.json'
+    outputs:
+      - 'dist'
+  typecheck:
+    command: 'npm run typecheck'
+    inputs:
+      - 'src/**/*'
+      - 'package.json'

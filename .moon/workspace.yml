@@ -1,0 +1,8 @@
+projects:
+  root: '.'
+  runtime: 'packages/runtime'
+  nodes: 'packages/nodes'
+
+vcs:
+  client: 'git'
+  defaultBranch: 'main'

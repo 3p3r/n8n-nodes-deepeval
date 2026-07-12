@@ -1,0 +1,134 @@
+{
+  "name": "DeepEval Aggregate Example",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "When clicking Execute Workflow",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\"metric\":\"DeepEval Example\",\"score\":1,\"reason\":\"Example passed\",\"success\":true,\"evalContext\":{\"runId\":\"example-run\",\"runName\":\"Example\"}}",
+        "options": {}
+      },
+      "id": "metric-result",
+      "name": "Metric Result",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "dataTableId": "REPLACE_WITH_RESULTS_DATA_TABLE_ID",
+        "passRule": "allPass",
+        "writeMode": "upsert",
+        "runIdColumn": "runId",
+        "scoreColumn": "overallScore",
+        "successColumn": "overallSuccess",
+        "metricsColumn": "metrics"
+      },
+      "id": "deepeval-aggregate",
+      "name": "DeepEval Aggregate",
+      "type": "n8n-nodes-deepeval.deepEvalAggregate",
+      "typeVersion": 1,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "REPLACE_WITH_RESULTS_DATA_TABLE_ID"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "runId": "={{ $json.runId }}",
+            "overallScore": "={{ $json.overallScore }}",
+            "overallSuccess": "={{ $json.overallSuccess }}",
+            "metrics": "={{ JSON.stringify($json.metrics) }}"
+          },
+          "schema": [
+            {
+              "id": "runId",
+              "displayName": "runId",
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "overallScore",
+              "displayName": "overallScore",
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "overallSuccess",
+              "displayName": "overallSuccess",
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "metrics",
+              "displayName": "metrics",
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "persist-results",
+      "name": "Persist Results",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [720, 0]
+    }
+  ],
+  "connections": {
+    "When clicking Execute Workflow": {
+      "main": [
+        [
+          {
+            "node": "Metric Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Metric Result": {
+      "main": [
+        [
+          {
+            "node": "DeepEval Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepEval Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Persist Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "pinData": {},
+  "tags": []
+}

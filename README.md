@@ -1,6 +1,7 @@
 # n8n-nodes-deepeval
 
-n8n community evaluation node powered by the deepeval framework.
+n8n community nodes powered by DeepEval: 33 metric nodes, DeepEval Trigger, and DeepEval
+Aggregate.
 
 - [n8n-nodes-deepeval](#n8n-nodes-deepeval)
   - [Synopsis](#synopsis)
@@ -57,11 +58,57 @@ n8n community evaluation node powered by the deepeval framework.
 
 ## Synopsis
 
-This is a collection of [N8N](https://github.com/n8n-io/n8n) nodes, designed to deeply integrate [DeepEval](https://github.com/confident-ai/deepeval) into its workflows.
+This package integrates [DeepEval](https://github.com/confident-ai/deepeval) into n8n 2.x.
+It requires Node.js 20 or newer. All 35 nodes are listed under n8n's `AI, LLM & Voice`
+category and are searchable with the `DeepEval Benchmarking` alias.
+
+The current package intentionally contains only the n8n nodes. The dashboard, dashboard
+hooks, Google Sheets adapters, and Microsoft Excel adapters are deferred.
+
+### Install and build
+
+Install the published community package in n8n:
+
+```sh
+npm install n8n-nodes-deepeval
+```
+
+For repository development, use npm only:
+
+```sh
+npm ci
+npm run build
+npm run typecheck
+npm run lint
+npm test
+```
+
+The first Moon build runs `root:vendor` automatically. It downloads pinned DeepEval
+4.0.7 and Pyodide 0.27.7 sources, applies the compatibility patches, verifies checksums,
+and builds local wheels. These generated assets are gitignored but included in the
+published package, so installed nodes do not download Python packages at runtime. Run
+`npm run vendor` directly only when explicitly refreshing the generated assets.
+
+Importable examples for every concrete node are in `packages/nodes/examples`. The
+end-to-end suite imports and executes those workflows through a real npm-installed n8n
+process.
+
+Live examples default to the OpenAI-compatible endpoint
+`http://deezr:4000/v1`, discover its model with `GET /models`, and use `local` as the API
+key. Override these in tests with `DEEPEVAL_INFERENCE_BASE_URL`,
+`DEEPEVAL_INFERENCE_MODEL`, and `OPENAI_API_KEY`.
 
 ## Architecture
 
-DeepEval in this project is executed inline and through [Pyodide](https://github.com/pyodide/pyodide). At a high level, there are two moving parts to this project:
+DeepEval executes inline through the vendored
+[Pyodide](https://github.com/pyodide/pyodide) runtime. Package loading starts one
+module-scoped initialization promise. Evaluations in a process reuse that warmed VM and
+are serialized through one queue. n8n queue workers are separate processes, so each
+worker gets one independent warmed runtime.
+
+Pyodide and the Python wheel set are included in the package for offline execution.
+Initialization is memory-intensive, and evaluations are intentionally serialized because
+the Python VM is not re-entrant. Plan worker memory and throughput around this constraint.
 
 ### Required N8N Nodes
 
@@ -69,11 +116,8 @@ Offered as N8N community nodes, these are the core components that allow you to 
 
 ### Optional Dashboard
 
-Offered as N8N hooks for both the frontend and backend, this dashboard provides a user-friendly interface for managing and visualizing your DeepEval benchmarks. It runs a parallel database alongside n8n — every DeepEval node (Trigger, metrics, Aggregate) transparently records its runs there; no extra wiring is required for dashboard visibility.
-
-The dashboard injects itself into the N8N frontend. Evaluation views are auto-generated via Refine's [Inferencer](https://refine.dev/core/docs/packages/inferencer) package from the recorded run data.
-
-**DeepEval Aggregate** is separate from the dashboard: it is the canvas mechanic for writing evaluation outcomes back **into n8n** (Data Tables, Google Sheets, Excel). Use Aggregate when you want workflow-visible rollup and dataset write-back; the dashboard captures runs in parallel regardless.
+The dashboard is not included in this implementation. No frontend injection, hooks,
+parallel database, or transparent recording behavior is installed.
 
 ## Available Nodes
 
@@ -111,31 +155,34 @@ Metric nodes accept n8n item fields on the **main** connection and/or special su
 
 ### DeepEval Trigger
 
-Starts an evaluation run by reading one dataset row per execution. Supplies test-case fields and run context for downstream metric nodes. Does not score; does not own Language Model or metric configuration.
+Starts an evaluation run from rows supplied by n8n's official Data Table node. It emits
+one mapped item and evaluation context per row. It does not score and does not own
+Language Model or metric configuration.
+
+n8n 2.x restricts the internal Data Table proxy to built-in node types. The example
+therefore uses the supported composition `Data Table (Get rows) → DeepEval Trigger`
+instead of bypassing that access control.
 
 **Config**
 
 - `runName` — human label for the evaluation run
-- `source` — data source type (`dataTable`, `googleSheets`, `excelSheets`)
-- source-specific connection, document, sheet, or table selectors
+- `dataTableId` — source table identity recorded in `evalContext`
 - `columnMapping` — map source columns → DeepEval fields (`input`, `expectedOutput`, `context`, `retrievalContext`, `expectedTools`, and so on)
 - `limitRows` — whether to cap how many rows are processed
 - `maxRows` — maximum rows when `limitRows` is enabled
 - `filters` — optional column=value filters on the dataset
 
 ```text
-[Data Tables | Google Sheets | Excel] ──► [ DeepEval Trigger ] ──┬── input / expectedOutput / …
-                                                                 ├── evalContext (runId, runName, isEvalRun, rowId)
-                                                                 └── (one item per dataset row)
+[ Data Table: Get rows ] ──► [ DeepEval Trigger ] ──┬── input / expectedOutput / …
+                                                    ├── evalContext (runId, runName, isEvalRun, rowId)
+                                                    └── one item per dataset row
 ```
 
 #### Sources
 
-Trigger reads evaluation datasets from the following source types (configured on the node, not separate nodes):
-
-- **Data Tables** — n8n [Data Tables](https://docs.n8n.io/build/work-with-data/data-tables); map columns to DeepEval fields
-- **Google Sheets** — spreadsheet document and sheet; filters and row limits supported
-- **Excel Sheets** — Excel file and sheet as dataset source
+This pass supports n8n
+[Data Tables](https://docs.n8n.io/build/work-with-data/data-tables) only. Google Sheets
+and Excel sources are deferred.
 
 ### DeepEval Metrics
 
@@ -897,18 +944,22 @@ Maps `intermediateSteps` → DeepEval `tools_called`. No Language Model sub-node
 
 ### DeepEval Aggregate
 
-Fan-in recorder for the eval branch. Collects unified metric results from one or more metric nodes and writes evaluation outcomes back into n8n via the configured sink. Transparent dashboard recording still happens automatically on every node; Aggregate is the canvas mechanic for n8n-side persistence and workflow-visible rollup.
+Fan-in transformer for an evaluation branch. It collects normalized metric results,
+computes the overall score and success state, and prepares a row for n8n's official Data
+Table node. The importable example persists that row with
+`DeepEval Aggregate → Data Table (Insert)`.
 
 **Config**
 
-- `sink` — write target type (`dataTable`, `googleSheets`, `excelSheets`)
-- sink-specific target (table, spreadsheet, sheet) and write-back column mapping
+- `dataTableId` — sink table identity included in the output
+- `writeMode` — intended downstream persistence mode
+- output column names for run ID, score, success, and serialized metrics
 - `metrics` — which incoming metric nodes to include (`allConnected` or explicit list)
 - `passRule` — overall `success` rule (`allPass`, `anyFail`, and so on)
 
 ```text
 metricA {score,reason,success} ──┐
-metricB {score,reason,success} ──┼── [ DeepEval Aggregate ] ──► sink (Data Tables | Sheets | Excel)
+metricB {score,reason,success} ──┼── [ DeepEval Aggregate ] ──► [ Data Table: Insert ]
 metricN {score,reason,success} ──┘             │
                                                ├── overall score / success
                                                └── per-metric fields
@@ -916,22 +967,19 @@ metricN {score,reason,success} ──┘             │
 
 #### Sinks
 
-Aggregate writes evaluation results to the following sink types (configured on the node, not separate nodes):
-
-- **Data Tables** — write per-metric columns and overall rollup back to an n8n Data Table
-- **Google Sheets** — append or update evaluation result rows in a spreadsheet
-- **Excel Sheets** — write results back to an Excel sheet
+This pass supports n8n Data Tables only, through the built-in Data Table node connected
+after Aggregate. Google Sheets and Excel sinks are deferred.
 
 #### Typical wiring
 
 **Batch eval** (dataset-driven):
 
 ```text
-[Data Tables | Sheets | Excel] ──► [ DeepEval Trigger ] ──┐
-                                                          ├──► [merge] ──► [AI Agent] ──► branch on isEvalRun
-[Chat / Webhook] ─────────────────────────────────────────┘                                 │
-                                                                                            ├─ prod → downstream
-                                                                                            └─ eval → [metric…] ──► [DeepEval Aggregate] ──► sink
+[Data Table: Get] ──► [DeepEval Trigger] ──┐
+                                           ├──► [merge] ──► [AI Agent] ──► branch on isEvalRun
+[Chat / Webhook] ──────────────────────────┘                                 │
+                                                                             ├─ prod → downstream
+                                                                             └─ eval → [metric…] ──► [Aggregate] ──► [Data Table: Insert]
 ```
 
 **Live chat eval** (conversational metrics — Memory required):

@@ -1,0 +1,113 @@
+diff --git a/deepeval/__init__.py b/deepeval/__init__.py
+index 31df8d56b..2d4e8ae83 100644
+--- a/deepeval/__init__.py
++++ b/deepeval/__init__.py
+@@ -3,6 +3,7 @@ from __future__ import annotations
+ import logging
+ import os
+ import re
++import sys
+ import warnings
+ 
+ # IMPORTANT: load environment variables before other imports
+@@ -72,7 +73,7 @@ _expose_public_api()
+ 
+ settings = get_settings()
+ 
+-if not settings.DEEPEVAL_GRPC_LOGGING:
++if sys.platform != "emscripten" and not settings.DEEPEVAL_GRPC_LOGGING:
+     if os.getenv("GRPC_VERBOSITY") is None:
+         os.environ["GRPC_VERBOSITY"] = settings.GRPC_VERBOSITY or "ERROR"
+     if os.getenv("GRPC_TRACE") is None:
+diff --git a/deepeval/telemetry.py b/deepeval/telemetry.py
+index cb1abecc3..3bcec0a46 100644
+--- a/deepeval/telemetry.py
++++ b/deepeval/telemetry.py
+@@ -4,14 +4,14 @@ import socket
+ import sys
+ import threading
+ import uuid
+-import sentry_sdk
+ from enum import Enum
+-from typing import List, Dict, Set
++from typing import List, Dict, Set, Optional, Any
+ import requests
+ from deepeval._version import __version__ as DEEPEVAL_VERSION
+ from deepeval.config.settings import get_settings
+ from deepeval.constants import LOGIN_PROMPT, HIDDEN_DIR, KEY_FILE
+-from posthog import Posthog
++
++posthog: Optional[Any] = None
+ 
+ 
+ class Feature(Enum):
+@@ -39,6 +39,8 @@ def telemetry_opt_out():
+ 
+ 
+ def blocked_by_firewall():
++    if sys.platform == "emscripten":
++        return True
+     try:
+         socket.create_connection(("www.google.com", 80))
+         return False
+@@ -111,6 +113,9 @@ if not telemetry_opt_out():
+ anonymous_public_ip = None
+ 
+ if not telemetry_opt_out():
++    import sentry_sdk
++    from posthog import Posthog
++
+     sentry_sdk.init(
+         dsn="https://5ef587d58109ee45d6544f3657efdd1f@o4506098477236224.ingest.sentry.io/4506098479136768",
+         profiles_sample_rate=0.0,
+@@ -136,6 +141,8 @@ if (
+ 
+     def handle_exception(exc_type, exc_value, exc_traceback):
+         try:
++            import sentry_sdk
++
+             sentry_sdk.capture_exception(exc_value)
+         except Exception:
+             pass
+diff --git a/deepeval/utils.py b/deepeval/utils.py
+index 4351d8597..509b12f4c 100644
+--- a/deepeval/utils.py
++++ b/deepeval/utils.py
+@@ -190,9 +190,11 @@ def serialize(obj) -> Union[str, None]:
+ 
+ 
+ def get_or_create_event_loop() -> asyncio.AbstractEventLoop:
++    import sys
++
+     try:
+         loop = asyncio.get_event_loop()
+-        if loop.is_running():
++        if loop.is_running() and sys.platform != "emscripten":
+             nest_asyncio.apply()
+ 
+         if loop.is_closed():
+diff --git a/pyproject.toml b/pyproject.toml
+index 9c1e67c38..c0ac13e5d 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -36,9 +36,6 @@ setuptools = "*"
+ wheel = "*"
+ nest_asyncio = "*"
+ tenacity = ">=8.0.0,<=10.0.0"
+-opentelemetry-api = "^1.24.0"
+-opentelemetry-sdk = "^1.24.0"
+-grpcio = "^1.67.1"
+ 
+ posthog = [
+     { version = ">=5.4.0, <7.0.0", python = "<3.10" },
+@@ -47,8 +44,8 @@ posthog = [
+ 
+ pyfiglet = "*"
+ python-dotenv = "^1.1.1"
+-pydantic = "^2.11.7"
+-pydantic-settings = "^2.10.1"
++pydantic = ">=2.10.5,<3.0.0"
++pydantic-settings = ">=2.6.0,<3.0.0"
+ jinja2 = "*"
+ 
+ textual = { version = ">=0.80,<2.0", optional = true }

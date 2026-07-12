@@ -1,0 +1,186 @@
+{
+  "name": "DeepEval Plan Quality Example",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "When clicking Execute Workflow",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\"input\":\"Use the calculator when appropriate, then answer: what is 2 + 2?\",\"actualOutput\":\"The answer is 4.\",\"output\":\"The answer is 4.\",\"expectedOutput\":\"The answer is 4.\",\"context\":[\"Two plus two equals four.\"],\"retrievalContext\":[\"[1] Basic arithmetic states that 2 + 2 = 4.\"],\"expectedTools\":[{\"name\":\"calculator\",\"inputParameters\":{\"input\":\"2+2\"}}],\"chatbotRole\":\"A concise and accurate arithmetic assistant\",\"expectedOutcome\":\"The assistant answers that 2 + 2 equals 4.\",\"metadata\":{\"suite\":\"deepeval-e2e\"}}",
+        "options": {}
+      },
+      "id": "evaluation-data",
+      "name": "Set Evaluation Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.input }}",
+        "options": {
+          "returnIntermediateSteps": true,
+          "systemMessage": "You are an arithmetic assistant. You must use the Calculator tool exactly once before answering."
+        }
+      },
+      "id": "ai-agent",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [460, 0]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "id": "metric-input",
+      "name": "Prepare Metric Input",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [700, 0]
+    },
+    {
+      "parameters": {
+        "threshold": 0.5,
+        "includeReason": true,
+        "strictMode": false,
+        "asyncMode": true,
+        "verboseMode": false
+      },
+      "id": "deepeval-metric",
+      "name": "DeepEval Plan Quality",
+      "type": "n8n-nodes-deepeval.deepEvalPlanQuality",
+      "typeVersion": 1,
+      "position": [940, 0]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "REPLACE_WITH_MODEL_ID"
+        },
+        "options": {
+          "baseURL": "http://deezr:4000/v1",
+          "timeout": 120000,
+          "maxRetries": 0
+        }
+      },
+      "id": "judge-model",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [500, 240],
+      "credentials": {
+        "openAiApi": {
+          "id": "REPLACE_WITH_OPENAI_CREDENTIAL_ID",
+          "name": "Local OpenAI-compatible endpoint"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "calculator",
+      "name": "Calculator",
+      "type": "@n8n/n8n-nodes-langchain.toolCalculator",
+      "typeVersion": 1,
+      "position": [820, 240]
+    }
+  ],
+  "connections": {
+    "When clicking Execute Workflow": {
+      "main": [
+        [
+          {
+            "node": "Set Evaluation Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Evaluation Data": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepare Metric Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Prepare Metric Input",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Prepare Metric Input": {
+      "main": [
+        [
+          {
+            "node": "DeepEval Plan Quality",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "DeepEval Plan Quality",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculator": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

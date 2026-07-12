@@ -1,0 +1,72 @@
+{
+  "name": "n8n-nodes-deepeval",
+  "version": "0.1.0",
+  "description": "DeepEval benchmarking nodes for n8n",
+  "license": "MIT",
+  "type": "commonjs",
+  "keywords": [
+    "n8n-community-node-package",
+    "n8n",
+    "deepeval",
+    "evaluation",
+    "benchmarking",
+    "llm"
+  ],
+  "files": [
+    "dist",
+    "assets",
+    "examples"
+  ],
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "n8n-workflow": ">=2.0.0"
+  },
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "strict": true,
+    "nodes": [
+      "dist/nodes/trigger/DeepEvalTrigger.node.js",
+      "dist/nodes/aggregate/DeepEvalAggregate.node.js",
+      "dist/nodes/metrics/DeepEvalGEval/DeepEvalGEval.node.js",
+      "dist/nodes/metrics/DeepEvalDAG/DeepEvalDAG.node.js",
+      "dist/nodes/metrics/DeepEvalConversationalGEval/DeepEvalConversationalGEval.node.js",
+      "dist/nodes/metrics/DeepEvalConversationalDAG/DeepEvalConversationalDAG.node.js",
+      "dist/nodes/metrics/DeepEvalTaskCompletion/DeepEvalTaskCompletion.node.js",
+      "dist/nodes/metrics/DeepEvalStepEfficiency/DeepEvalStepEfficiency.node.js",
+      "dist/nodes/metrics/DeepEvalArgumentCorrectness/DeepEvalArgumentCorrectness.node.js",
+      "dist/nodes/metrics/DeepEvalToolCorrectness/DeepEvalToolCorrectness.node.js",
+      "dist/nodes/metrics/DeepEvalPlanAdherence/DeepEvalPlanAdherence.node.js",
+      "dist/nodes/metrics/DeepEvalPlanQuality/DeepEvalPlanQuality.node.js",
+      "dist/nodes/metrics/DeepEvalTurnRelevancy/DeepEvalTurnRelevancy.node.js",
+      "dist/nodes/metrics/DeepEvalRoleAdherence/DeepEvalRoleAdherence.node.js",
+      "dist/nodes/metrics/DeepEvalKnowledgeRetention/DeepEvalKnowledgeRetention.node.js",
+      "dist/nodes/metrics/DeepEvalConversationCompleteness/DeepEvalConversationCompleteness.node.js",
+      "dist/nodes/metrics/DeepEvalGoalAccuracy/DeepEvalGoalAccuracy.node.js",
+      "dist/nodes/metrics/DeepEvalToolUse/DeepEvalToolUse.node.js",
+      "dist/nodes/metrics/DeepEvalTopicAdherence/DeepEvalTopicAdherence.node.js",
+      "dist/nodes/metrics/DeepEvalTurnFaithfulness/DeepEvalTurnFaithfulness.node.js",
+      "dist/nodes/metrics/DeepEvalTurnContextualPrecision/DeepEvalTurnContextualPrecision.node.js",
+      "dist/nodes/metrics/DeepEvalTurnContextualRecall/DeepEvalTurnContextualRecall.node.js",
+      "dist/nodes/metrics/DeepEvalTurnContextualRelevancy/DeepEvalTurnContextualRelevancy.node.js",
+      "dist/nodes/metrics/DeepEvalBias/DeepEvalBias.node.js",
+      "dist/nodes/metrics/DeepEvalToxicity/DeepEvalToxicity.node.js",
+      "dist/nodes/metrics/DeepEvalNonAdvice/DeepEvalNonAdvice.node.js",
+      "dist/nodes/metrics/DeepEvalMisuse/DeepEvalMisuse.node.js",
+      "dist/nodes/metrics/DeepEvalPIILeakage/DeepEvalPIILeakage.node.js",
+      "dist/nodes/metrics/DeepEvalRoleViolation/DeepEvalRoleViolation.node.js",
+      "dist/nodes/metrics/DeepEvalSummarization/DeepEvalSummarization.node.js",
+      "dist/nodes/metrics/DeepEvalPromptAlignment/DeepEvalPromptAlignment.node.js",
+      "dist/nodes/metrics/DeepEvalHallucination/DeepEvalHallucination.node.js",
+      "dist/nodes/metrics/DeepEvalCitationFaithfulness/DeepEvalCitationFaithfulness.node.js",
+      "dist/nodes/metrics/DeepEvalAgentLoopDetection/DeepEvalAgentLoopDetection.node.js",
+      "dist/nodes/metrics/DeepEvalToolPermission/DeepEvalToolPermission.node.js"
+    ]
+  },
+  "dependencies": {
+    "pyodide": "^0.27.7",
+    "@n8n-deepeval/runtime": "file:../runtime"
+  }
+}

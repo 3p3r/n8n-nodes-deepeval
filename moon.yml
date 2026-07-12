@@ -1,0 +1,48 @@
+language: 'typescript'
+layer: 'tool'
+
+tasks:
+  vendor:
+    command: 'npm run vendor'
+    inputs:
+      - 'tooling/vendor.ts'
+      - 'tooling/patches/**/*'
+      - 'packages/runtime/package.json'
+      - 'package-lock.json'
+    outputs:
+      - 'vendor'
+      - 'packages/pyodide-otel-stubs'
+      - 'packages/runtime/assets'
+  generate:
+    command: 'npm run generate'
+    inputs:
+      - 'tooling/generate.ts'
+      - 'packages/nodes/src/shared/metric-definitions.ts'
+    outputs:
+      - 'packages/nodes/src/nodes'
+      - 'packages/nodes/examples'
+  typecheck:
+    command: 'npm run typecheck'
+    inputs:
+      - '**/*.ts'
+      - 'tsconfig.json'
+  lint:
+    command: 'npm run lint'
+    deps:
+      - 'generate'
+    inputs:
+      - 'biome.json'
+      - 'README.md'
+      - 'package.json'
+      - 'tsconfig.json'
+      - 'vitest.config.ts'
+      - 'packages/**/*.ts'
+      - 'packages/**/*.json'
+      - 'tooling/**/*.ts'
+      - 'e2e/**/*.ts'
+  test:
+    command: 'npm run test:e2e'
+    deps:
+      - 'nodes:build'
+    options:
+      cache: false

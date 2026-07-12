@@ -1,0 +1,9 @@
+javascript:
+  packageManager: 'npm'
+  syncProjectWorkspaceDependencies: true
+
+node:
+  version: '24.15.0'
+
+npm:
+  version: '11.13.0'

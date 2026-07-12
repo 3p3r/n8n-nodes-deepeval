@@ -1,0 +1,22 @@
+diff --git a/deepeval/metrics/argument_correctness/argument_correctness.py b/deepeval/metrics/argument_correctness/argument_correctness.py
+index 62fd886..744855b 100644
+--- a/deepeval/metrics/argument_correctness/argument_correctness.py
++++ b/deepeval/metrics/argument_correctness/argument_correctness.py
+@@ -216,7 +216,7 @@ class ArgumentCorrectnessMetric(BaseMetric):
+         prompt = self._get_prompt(
+             "generate_verdicts",
+             input=input,
+-            tools_called=tools_called,
++            stringified_tools_called=prettify_list(tools_called),
+             multimodal=multimodal,
+         )
+ 
+@@ -236,7 +236,7 @@ class ArgumentCorrectnessMetric(BaseMetric):
+         prompt = self._get_prompt(
+             "generate_verdicts",
+             input=input,
+-            tools_called=tools_called,
++            stringified_tools_called=prettify_list(tools_called),
+             multimodal=multimodal,
+         )
+ 

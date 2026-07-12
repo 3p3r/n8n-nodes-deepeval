@@ -1,0 +1,77 @@
+{
+  "name": "DeepEval Trigger Example",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "When clicking Execute Workflow",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "REPLACE_WITH_SOURCE_DATA_TABLE_ID"
+        },
+        "returnAll": true,
+        "filters": {},
+        "orderBy": false
+      },
+      "id": "source-table",
+      "name": "Load Source Rows",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "runName": "Local DeepEval Benchmark",
+        "dataTableId": "REPLACE_WITH_SOURCE_DATA_TABLE_ID",
+        "columnMapping": "{\"input\":\"input\",\"expectedOutput\":\"expectedOutput\"}",
+        "filters": "{}",
+        "limitRows": true,
+        "maxRows": 10
+      },
+      "id": "deepeval-trigger",
+      "name": "DeepEval Trigger",
+      "type": "n8n-nodes-deepeval.deepEvalTrigger",
+      "typeVersion": 1,
+      "position": [480, 0]
+    }
+  ],
+  "connections": {
+    "When clicking Execute Workflow": {
+      "main": [
+        [
+          {
+            "node": "Load Source Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Source Rows": {
+      "main": [
+        [
+          {
+            "node": "DeepEval Trigger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "pinData": {},
+  "tags": []
+}
