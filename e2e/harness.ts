@@ -107,8 +107,9 @@ function prepareWorkflow(
       model.value = context.model;
       node.parameters.options = {
         baseURL: context.inferenceBaseUrl,
-        timeout: 120_000,
+        timeout: 180_000,
         maxRetries: 0,
+        temperature: 0,
       };
       if (node.credentials?.openAiApi) {
         node.credentials.openAiApi.id = context.credentialId;
@@ -199,25 +200,7 @@ export function runNodeWorkflow(workflowId: string, displayName: string): void {
           return executionOutput(execution, displayName);
         };
 
-        const executeWithRetry = async (): Promise<ReturnType<typeof executionOutput>> => {
-          for (let attempt = 1; attempt <= 5; attempt += 1) {
-            try {
-              return await executeOnce();
-            } catch (error) {
-              const message = error instanceof Error ? error.message : String(error);
-              const transient =
-                message.includes('Service unavailable') ||
-                message.includes('service was not able to process your request') ||
-                message.includes('Request timed out') ||
-                message.includes('Evaluation LLM outputted an invalid JSON');
-              if (!transient || attempt === 5) throw error;
-              await new Promise((resolveWait) => setTimeout(resolveWait, attempt * 5_000));
-            }
-          }
-          throw new Error(`No output produced by ${displayName}`);
-        };
-
-        const output = await executeWithRetry();
+        const output = await executeOnce();
         expect(output.length).toBeGreaterThan(0);
 
         if (workflowId === 'deepEvalTrigger') {
@@ -238,7 +221,7 @@ export function runNodeWorkflow(workflowId: string, displayName: string): void {
           expect(output[0]?.reason === null || typeof output[0]?.reason === 'string').toBe(true);
 
           if (workflowId === 'bias') {
-            const concurrentOutputs = await Promise.all([executeWithRetry(), executeWithRetry()]);
+            const concurrentOutputs = await Promise.all([executeOnce(), executeOnce()]);
             for (const concurrentOutput of concurrentOutputs) {
               expect(concurrentOutput[0]?.metric).toBe(displayName);
               expect(typeof concurrentOutput[0]?.score).toBe('number');

@@ -52,7 +52,7 @@
       "parameters": {
         "name": "Conversation Quality",
         "criteria": "Determine whether the conversation is helpful.",
-        "evaluationSteps": "[]",
+        "evaluationSteps": "[\"Check whether the response answers the user question.\",\"Check whether the response is accurate and supported by the context.\"]",
         "evaluationParams": ["CONTENT"],
         "rubric": "[]",
         "threshold": 0.5,
@@ -74,7 +74,7 @@
           "value": "REPLACE_WITH_MODEL_ID"
         },
         "options": {
-          "baseURL": "http://deezr:4000/v1",
+          "baseURL": "http://127.0.0.1:8080/v1",
           "timeout": 120000,
           "maxRetries": 0
         }

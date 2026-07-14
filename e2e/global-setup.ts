@@ -29,6 +29,9 @@ interface ApiResponse<T> {
 }
 
 const root = resolve(import.meta.dirname, '..');
+const apiKey = 'sk-no-key-required';
+const apeLoaderPath = resolve(root, '.llamafile/ape');
+const llamafilePath = resolve(root, '.llamafile/Ministral-3-3B-Instruct-2512-Q4_K_M.llamafile');
 
 async function freePort(): Promise<number> {
   return await new Promise((resolvePort, reject) => {
@@ -69,6 +72,37 @@ async function waitForServer(baseUrl: string, child: ChildProcess): Promise<void
   throw new Error('Timed out waiting for the real n8n server to start');
 }
 
+async function waitForLlamafile(baseUrl: string, child: ChildProcess): Promise<string> {
+  const deadline = Date.now() + 180_000;
+  let spawnError: Error | undefined;
+  child.once('error', (error) => {
+    spawnError = error;
+  });
+  while (Date.now() < deadline) {
+    if (spawnError) throw spawnError;
+    if (child.exitCode !== null) {
+      throw new Error(`llamafile exited during startup with code ${child.exitCode}`);
+    }
+    let response: Response;
+    try {
+      response = await fetch(`${baseUrl}/models`);
+    } catch {
+      await new Promise((resolveWait) => setTimeout(resolveWait, 250));
+      continue;
+    }
+    if (!response.ok) {
+      await new Promise((resolveWait) => setTimeout(resolveWait, 250));
+      continue;
+    }
+    const models = await responseData<Array<{ id: string }>>(response);
+    if (models.length !== 1 || !models[0]?.id) {
+      throw new Error(`Expected exactly one model from ${baseUrl}/models`);
+    }
+    return models[0].id;
+  }
+  throw new Error('Timed out waiting for llamafile to start');
+}
+
 async function responseData<T>(response: Response): Promise<T> {
   const body = (await response.json()) as ApiResponse<T> | T;
   if (!response.ok) throw new Error(`n8n API ${response.status}: ${JSON.stringify(body)}`);
@@ -77,58 +111,78 @@ async function responseData<T>(response: Response): Promise<T> {
     : (body as T);
 }
 
-export default async function setup(project: TestProject): Promise<() => Promise<void>> {
-  const inferenceBaseUrl =
-    process.env.DEEPEVAL_INFERENCE_BASE_URL ??
-    process.env.DEEPEVAL_OPENAI_BASE_URL ??
-    'http://deezr:4000/v1';
-  const apiKey = process.env.OPENAI_API_KEY ?? process.env.DEEPEVAL_OPENAI_API_KEY ?? 'local';
-  const modelResponse = await fetch(`${inferenceBaseUrl}/models`, {
-    headers: { Authorization: `Bearer ${apiKey}` },
+async function stopProcess(child: ChildProcess): Promise<void> {
+  if (child.pid === undefined) return;
+  if (child.exitCode === null) child.kill('SIGTERM');
+  await new Promise<void>((resolveExit) => {
+    if (child.exitCode !== null) resolveExit();
+    else child.once('exit', () => resolveExit());
   });
-  const models = await responseData<Array<{ id: string }>>(modelResponse);
-  const model =
-    process.env.DEEPEVAL_INFERENCE_MODEL ??
-    process.env.DEEPEVAL_OPENAI_MODEL ??
-    models.find(({ id }) => id === 'smaller-qwens')?.id ??
-    models[0]?.id;
-  if (!model) throw new Error(`No model was returned by ${inferenceBaseUrl}/models`);
+}
 
+export default async function setup(project: TestProject): Promise<() => Promise<void>> {
   const userFolder = await mkdtemp(resolve(tmpdir(), 'n8n-deepeval-e2e-'));
   const logPath = resolve(userFolder, 'n8n.log');
   const logStream = createWriteStream(logPath, { flags: 'a' });
-  const port = await freePort();
-  let runnerPort = await freePort();
-  while (runnerPort === port) runnerPort = await freePort();
-  const baseUrl = `http://127.0.0.1:${port}`;
-  const child = spawn(process.execPath, [resolve(root, 'node_modules/n8n/bin/n8n'), 'start'], {
-    cwd: root,
-    env: {
-      ...process.env,
-      NODE_ENV: 'production',
-      VITEST: '',
-      VITEST_MODE: '',
-      N8N_USER_FOLDER: userFolder,
-      N8N_PORT: String(port),
-      N8N_RUNNERS_BROKER_PORT: String(runnerPort),
-      N8N_HOST: '127.0.0.1',
-      N8N_SECURE_COOKIE: 'false',
-      N8N_DIAGNOSTICS_ENABLED: 'false',
-      N8N_PERSONALIZATION_ENABLED: 'false',
-      N8N_VERSION_NOTIFICATIONS_ENABLED: 'false',
-      N8N_TEMPLATES_ENABLED: 'false',
-      N8N_RUNNERS_ENABLED: 'false',
-      N8N_COMMUNITY_PACKAGES_ENABLED: 'true',
-      N8N_CUSTOM_EXTENSIONS: resolve(root, 'packages/nodes/dist'),
-      N8N_ENCRYPTION_KEY: 'deepeval-e2e-encryption-key',
-      N8N_LOG_LEVEL: 'info',
+  const inferencePort = await freePort();
+  const inferenceBaseUrl = `http://127.0.0.1:${inferencePort}/v1`;
+  const llamafile = spawn(
+    apeLoaderPath,
+    [
+      llamafilePath,
+      '--server',
+      '--host',
+      '127.0.0.1',
+      '--port',
+      String(inferencePort),
+      '--jinja',
+      '--ctx-size',
+      '8192',
+      '--temp',
+      '0',
+    ],
+    {
+      cwd: root,
+      stdio: ['ignore', 'pipe', 'pipe'],
     },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  child.stdout?.pipe(logStream);
-  child.stderr?.pipe(logStream);
+  );
+  llamafile.stdout?.pipe(logStream, { end: false });
+  llamafile.stderr?.pipe(logStream, { end: false });
 
+  let child: ChildProcess | undefined;
   try {
+    const model = await waitForLlamafile(inferenceBaseUrl, llamafile);
+    const port = await freePort();
+    let runnerPort = await freePort();
+    while (runnerPort === port || runnerPort === inferencePort) runnerPort = await freePort();
+    const baseUrl = `http://127.0.0.1:${port}`;
+    child = spawn(process.execPath, [resolve(root, 'node_modules/n8n/bin/n8n'), 'start'], {
+      cwd: root,
+      env: {
+        ...process.env,
+        NODE_ENV: 'production',
+        VITEST: '',
+        VITEST_MODE: '',
+        N8N_USER_FOLDER: userFolder,
+        N8N_PORT: String(port),
+        N8N_RUNNERS_BROKER_PORT: String(runnerPort),
+        N8N_HOST: '127.0.0.1',
+        N8N_SECURE_COOKIE: 'false',
+        N8N_DIAGNOSTICS_ENABLED: 'false',
+        N8N_PERSONALIZATION_ENABLED: 'false',
+        N8N_VERSION_NOTIFICATIONS_ENABLED: 'false',
+        N8N_TEMPLATES_ENABLED: 'false',
+        N8N_RUNNERS_ENABLED: 'false',
+        N8N_COMMUNITY_PACKAGES_ENABLED: 'true',
+        N8N_CUSTOM_EXTENSIONS: resolve(root, 'packages/nodes/dist'),
+        N8N_ENCRYPTION_KEY: 'deepeval-e2e-encryption-key',
+        N8N_LOG_LEVEL: 'info',
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    child.stdout?.pipe(logStream, { end: false });
+    child.stderr?.pipe(logStream, { end: false });
+
     await waitForServer(baseUrl, child);
     const ownerResponse = await fetch(`${baseUrl}/rest/owner/setup`, {
       method: 'POST',
@@ -232,22 +286,18 @@ export default async function setup(project: TestProject): Promise<() => Promise
       nodeTypes,
     });
   } catch (error) {
-    if (child.exitCode === null) child.kill('SIGTERM');
-    await new Promise<void>((resolveExit) => {
-      if (child.exitCode !== null) resolveExit();
-      else child.once('exit', () => resolveExit());
-    });
+    if (child) await stopProcess(child);
+    await stopProcess(llamafile);
     await new Promise<void>((resolveEnd) => logStream.end(resolveEnd));
     const logs = await readFile(logPath, 'utf8');
     throw new Error(`${error instanceof Error ? error.message : String(error)}\n${logs}`);
   }
 
+  const n8n = child;
+  if (!n8n) throw new Error('n8n did not start');
   return async () => {
-    child.kill('SIGTERM');
-    await new Promise<void>((resolveExit) => {
-      if (child.exitCode !== null) resolveExit();
-      else child.once('exit', () => resolveExit());
-    });
+    await stopProcess(llamafile);
+    await stopProcess(n8n);
     await new Promise<void>((resolveEnd) => logStream.end(resolveEnd));
     const logs = await readFile(logPath, 'utf8');
     const initializationCount = logs.match(/pyodide-initialized .* count=1/g)?.length ?? 0;

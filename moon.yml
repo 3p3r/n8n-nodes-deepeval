@@ -2,6 +2,12 @@ language: 'typescript'
 layer: 'tool'
 
 tasks:
+  ensure-llamafile:
+    command: 'npm run ensure-llamafile'
+    inputs:
+      - 'tooling/ensure-llamafile.ts'
+    outputs:
+      - '.llamafile'
   vendor:
     command: 'npm run vendor'
     inputs:
@@ -44,5 +50,6 @@ tasks:
     command: 'npm run test:e2e'
     deps:
       - 'nodes:build'
+      - 'root:ensure-llamafile'
     options:
       cache: false

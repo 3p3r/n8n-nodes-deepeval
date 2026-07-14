@@ -31,7 +31,7 @@ function promptWithSchema(request: JudgeRequest): string {
   if (!request.schema) return request.prompt;
   return `${request.prompt}
 
-Return only one valid JSON object matching this JSON Schema. Do not wrap it in markdown:
+Return only one valid JSON object matching this JSON Schema. Use escaped \\\\n and \\\\r inside string values. Do not wrap the JSON in markdown:
 ${JSON.stringify(request.schema)}`;
 }
 

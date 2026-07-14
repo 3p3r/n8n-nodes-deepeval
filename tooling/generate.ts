@@ -108,7 +108,13 @@ function exampleParameters(definition: MetricDefinition): Record<string, unknown
   }
   if ('chatbotRole' in parameters) parameters.chatbotRole = fixture.chatbotRole;
   if ('expectedOutcome' in parameters) parameters.expectedOutcome = fixture.expectedOutcome;
-  if ('evaluationSteps' in parameters) parameters.evaluationSteps = '[]';
+  if ('evaluationSteps' in parameters) {
+    parameters.evaluationSteps = JSON.stringify([
+      'Check whether the response answers the user question.',
+      'Check whether the response is accurate and supported by the context.',
+    ]);
+  }
+  if (definition.id === 'turnFaithfulness') parameters.includeReason = false;
   if ('rubric' in parameters) parameters.rubric = '[]';
   return parameters;
 }
@@ -196,7 +202,7 @@ function metricWorkflow(definition: MetricDefinition): Record<string, unknown> {
       parameters: {
         model: { __rl: true, mode: 'id', value: 'REPLACE_WITH_MODEL_ID' },
         options: {
-          baseURL: 'http://deezr:4000/v1',
+          baseURL: 'http://127.0.0.1:8080/v1',
           timeout: 120_000,
           maxRetries: 0,
         },

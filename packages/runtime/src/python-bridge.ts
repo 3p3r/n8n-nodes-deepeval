@@ -26,14 +26,71 @@ class N8nJudgeModel(DeepEvalBaseLLM):
     def get_model_name(self, *args, **kwargs):
         return "n8n connected language model"
 
-    def generate(self, *args, **kwargs):
+    def generate(self, prompt, schema=None, *args, **kwargs):
         raise RuntimeError("n8n language models are asynchronous")
+
+    def _salvage_json_text(self, text):
+        import re
+
+        score = re.search(r'"score"\s*:\s*([-+]?[0-9]*\.?[0-9]+)', text)
+        if score is None:
+            return None
+        reason = re.search(r'"reason"\s*:\s*"(.*?)"\s*[,}]', text, re.DOTALL)
+        payload = {"score": float(score.group(1)), "reason": ""}
+        if reason is not None:
+            payload["reason"] = reason.group(1).replace("\\n", " ").replace("\\r", " ")
+        return payload
+
+    def _load_json_text(self, text):
+        from deepeval.metrics.utils import trimAndLoadJson
+
+        try:
+            return trimAndLoadJson(text)
+        except ValueError:
+            start = text.find("{")
+            end = text.rfind("}") + 1
+            blob = text[start:end]
+            fixed = []
+            in_string = False
+            escape = False
+            for char in blob:
+                if escape:
+                    fixed.append(char)
+                    escape = False
+                    continue
+                if char == "\\\\" and in_string:
+                    fixed.append(char)
+                    escape = True
+                    continue
+                if char == '"':
+                    in_string = not in_string
+                    fixed.append(char)
+                    continue
+                if in_string and char == "\\n":
+                    fixed.append("\\\\n")
+                    continue
+                if in_string and char == "\\r":
+                    fixed.append("\\\\r")
+                    continue
+                if not in_string and ord(char) < 32 and char not in "\\n\\r\\t":
+                    continue
+                fixed.append(char)
+            try:
+                return json.loads("".join(fixed))
+            except json.JSONDecodeError:
+                salvaged = self._salvage_json_text(text)
+                if salvaged is None:
+                    raise
+                return salvaged
 
     async def a_generate(self, prompt, schema=None, *args, **kwargs):
         schema_json = None
         if schema is not None and hasattr(schema, "model_json_schema"):
             schema_json = json.dumps(schema.model_json_schema())
-        return str(await globals()["__deepeval_judge"](str(prompt), schema_json))
+        text = str(await globals()["__deepeval_judge"](str(prompt), schema_json))
+        if schema is not None and hasattr(schema, "model_validate"):
+            return schema.model_validate(self._load_json_text(text))
+        return text
 
 
 def _tool_call(value):

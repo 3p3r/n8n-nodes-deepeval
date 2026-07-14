@@ -93,10 +93,12 @@ Importable examples for every concrete node are in `packages/nodes/examples`. Th
 end-to-end suite imports and executes those workflows through a real npm-installed n8n
 process.
 
-Live examples default to the OpenAI-compatible endpoint
-`http://deezr:4000/v1`, discover its model with `GET /models`, and use `local` as the API
-key. Override these in tests with `DEEPEVAL_INFERENCE_BASE_URL`,
-`DEEPEVAL_INFERENCE_MODEL`, and `OPENAI_API_KEY`.
+The Moon E2E task downloads the pinned Mozilla
+`Ministral-3-3B-Instruct-2512-Q4_K_M.llamafile` and Cosmopolitan APE loader into the
+gitignored `.llamafile` directory, verifies SHA-256 checksums, and runs the llamafile
+OpenAI-compatible server locally. Tests use only this local model with
+`sk-no-key-required`; there is no remote inference endpoint or environment-variable
+override. Generated examples default to `http://127.0.0.1:8080/v1`.
 
 ## Architecture
 

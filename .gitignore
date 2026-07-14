@@ -6,6 +6,7 @@
 vendor/
 packages/pyodide-otel-stubs/
 packages/runtime/assets/
+.llamafile/
 .moon/cache/
 
 # Logs

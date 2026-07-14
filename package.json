@@ -13,6 +13,7 @@
   },
   "scripts": {
     "generate": "vite-node tooling/generate.ts && biome format --write packages/nodes/examples packages/nodes/src/nodes e2e/generated",
+    "ensure-llamafile": "vite-node tooling/ensure-llamafile.ts",
     "vendor": "vite-node tooling/vendor.ts",
     "build": "npm run generate && moon run runtime:build nodes:build",
     "typecheck": "tsc --noEmit",
