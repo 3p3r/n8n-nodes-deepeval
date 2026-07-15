@@ -64,7 +64,7 @@ CI (`.github/workflows/ci.yml`): Ubuntu, Node 24, npm 11.13.0, Python 3.12 + set
 
 ## README screenshots (`docs/`)
 
-The README embeds **35** example-workflow screenshots under **Available Nodes** — one per node, filenames `docs/{id}.example.png` where `{id}` matches `packages/nodes/examples/{id}.workflow.json`.
+The README embeds **37** example-workflow screenshots — **35** under **Available Nodes** (one per node) plus **2** kitchen-sink workflows before that section. Filenames are `docs/{id}.example.png` where `{id}` matches `packages/nodes/examples/{id}.workflow.json`.
 
 ### When to update
 
@@ -82,10 +82,14 @@ Screenshot capture is intentionally **not** committed as repo scripts. Re-run ad
 
 1. **Build** — `npm run build && npm run ensure-llamafile`
 2. **Boot one clean session** — same as E2E: temp `N8N_USER_FOLDER`, llamafile on a free port, n8n with `N8N_CUSTOM_EXTENSIONS=packages/nodes/dist`, owner setup, OpenAI credential → local llamafile base URL, source/results Data Tables. Reuse `startN8nSession()` from `e2e/n8n-session.ts`.
-3. **Import each example** — for each `packages/nodes/examples/{id}.workflow.json`, run through `prepareWorkflow()` from `e2e/workflow-prep.ts`, then `POST /rest/workflows`. Keep n8n running for all 35 imports (one session, not 35 restarts).
+3. **Import each example** — for each `packages/nodes/examples/{id}.workflow.json`, run through `prepareWorkflow()` from `e2e/workflow-prep.ts`, then `POST /rest/workflows`. Keep n8n running for all imports (one session, not per-file restarts). Include kitchen-sink workflows when refreshing those screenshots.
 4. **Screenshot each workflow** — open `http://127.0.0.1:{port}/workflow/{workflowId}`, click **Tidy Up** (bottom-left canvas control), save full canvas viewport as `docs/{id}.example.png`.
    - **WSL note:** Cursor's embedded browser often cannot reach WSL `127.0.0.1`. Use Playwright/Chromium **on WSL** with auth from the E2E session cookie or `/rest/login` (`e2e@example.com` / `DeepEval-E2E-Password1` from `e2e/n8n-session.ts`).
 5. **Update README** — after each node's **Config** bullet list, ensure `![{displayName} example workflow](docs/{id}.example.png)`. Remove any ` ```text ` wiring blocks. README section order for images:
+
+   `kitchenSinkNonConversational`, `kitchenSinkConversational` (README **Kitchen-sink examples** section, before Available Nodes)
+
+   Per-node order under Available Nodes:
 
    `deepEvalTrigger`, `gEval`, `dag`, `conversationalGEval`, `conversationalDAG`, `taskCompletion`, `stepEfficiency`, `argumentCorrectness`, `toolCorrectness`, `planAdherence`, `planQuality`, `turnRelevancy`, `roleAdherence`, `knowledgeRetention`, `conversationCompleteness`, `goalAccuracy`, `toolUse`, `topicAdherence`, `turnFaithfulness`, `turnContextualPrecision`, `turnContextualRecall`, `turnContextualRelevancy`, `bias`, `toxicity`, `nonAdvice`, `misuse`, `piiLeakage`, `roleViolation`, `summarization`, `promptAlignment`, `hallucination`, `citationFaithfulness`, `agentLoopDetection`, `toolPermission`, `deepEvalAggregate`
 
@@ -93,7 +97,7 @@ Screenshot capture is intentionally **not** committed as repo scripts. Re-run ad
 
 6. **Tear down** — SIGTERM llamafile and n8n; delete temp user folder.
 
-Verify: `docs/` contains exactly 35 `*.example.png` files; README has no ` ```text ` blocks under Available Nodes.
+Verify: `docs/` contains exactly 37 `*.example.png` files; README has no ` ```text ` blocks under Available Nodes.
 
 ## Conventions for agents
 

@@ -382,6 +382,388 @@ function triggerWorkflow(): Record<string, unknown> {
   };
 }
 
+const kitchenSinkEnrichFields = {
+  input: fixture.input,
+  actualOutput: fixture.actualOutput,
+  output: fixture.output,
+  context: fixture.context,
+  retrievalContext: fixture.retrievalContext,
+  expectedTools: fixture.expectedTools,
+  chatbotRole: fixture.chatbotRole,
+  expectedOutcome: fixture.expectedOutcome,
+  metadata: fixture.metadata,
+};
+
+function kitchenSinkEnrichAssignments(): Array<Record<string, unknown>> {
+  let index = 0;
+  return Object.entries(kitchenSinkEnrichFields).map(([name, value]) => {
+    const assignment: Record<string, unknown> = {
+      id: `enrich-${index++}`,
+      name,
+    };
+    if (Array.isArray(value)) {
+      assignment.type = 'array';
+      assignment.value = JSON.stringify(value);
+    } else if (value && typeof value === 'object') {
+      assignment.type = 'object';
+      assignment.value = value;
+    } else {
+      assignment.type = 'string';
+      assignment.value = String(value);
+    }
+    return assignment;
+  });
+}
+
+function kitchenSinkWorkflow(conversational: boolean): Record<string, unknown> {
+  const metrics = metricDefinitions.filter((definition) =>
+    conversational ? definition.requiresMemory : !definition.requiresMemory,
+  );
+  const workflowName = conversational
+    ? 'Conversational Kitchen Sink'
+    : 'Non-Conversational Kitchen Sink';
+
+  const nodes: WorkflowNode[] = [
+    {
+      parameters: {},
+      id: 'manual-trigger',
+      name: 'When clicking Execute Workflow',
+      type: 'n8n-nodes-base.manualTrigger',
+      typeVersion: 1,
+      position: [0, 0],
+    },
+    {
+      parameters: {
+        resource: 'row',
+        operation: 'get',
+        dataTableId: {
+          __rl: true,
+          mode: 'id',
+          value: 'REPLACE_WITH_SOURCE_DATA_TABLE_ID',
+        },
+        returnAll: true,
+        filters: {},
+        orderBy: false,
+      },
+      id: 'source-table',
+      name: 'Load Source Rows',
+      type: 'n8n-nodes-base.dataTable',
+      typeVersion: 1.1,
+      position: [240, 0],
+    },
+    {
+      parameters: {
+        runName: conversational
+          ? 'Conversational Kitchen Sink Benchmark'
+          : 'Non-Conversational Kitchen Sink Benchmark',
+        dataTableId: 'REPLACE_WITH_SOURCE_DATA_TABLE_ID',
+        columnMapping: '{"input":"input","expectedOutput":"expectedOutput"}',
+        filters: '{}',
+        limitRows: true,
+        maxRows: 1,
+      },
+      id: 'deepeval-trigger',
+      name: 'DeepEval Trigger',
+      type: 'n8n-nodes-deepeval.deepEvalTrigger',
+      typeVersion: 1,
+      position: [480, 0],
+    },
+    {
+      parameters: {
+        mode: 'manual',
+        assignments: {
+          assignments: kitchenSinkEnrichAssignments(),
+        },
+        includeOtherFields: true,
+        options: {},
+      },
+      id: 'enrich-evaluation-data',
+      name: 'Enrich Evaluation Data',
+      type: 'n8n-nodes-base.set',
+      typeVersion: 3.4,
+      position: [720, 0],
+    },
+    {
+      parameters: {
+        promptType: 'define',
+        text: '={{ $json.input }}',
+        options: {
+          returnIntermediateSteps: true,
+          systemMessage:
+            'You are an arithmetic assistant. You must use the Calculator tool exactly once before answering.',
+        },
+      },
+      id: 'ai-agent',
+      name: 'AI Agent',
+      type: '@n8n/n8n-nodes-langchain.agent',
+      typeVersion: 3.1,
+      position: [960, 0],
+    },
+    {
+      parameters: {
+        mode: 'combine',
+        combineBy: 'combineByPosition',
+        options: {},
+      },
+      id: 'metric-input',
+      name: 'Prepare Metric Input',
+      type: 'n8n-nodes-base.merge',
+      typeVersion: 3.2,
+      position: [1200, 0],
+    },
+    {
+      parameters: {
+        mode: 'append',
+        numberInputs: metrics.length,
+        options: {},
+      },
+      id: 'collect-metric-results',
+      name: 'Collect Metric Results',
+      type: 'n8n-nodes-base.merge',
+      typeVersion: 3.2,
+      position: [1680, 0],
+    },
+    {
+      parameters: {
+        dataTableId: 'REPLACE_WITH_RESULTS_DATA_TABLE_ID',
+        passRule: 'allPass',
+        writeMode: 'upsert',
+        runIdColumn: 'runId',
+        scoreColumn: 'overallScore',
+        successColumn: 'overallSuccess',
+        metricsColumn: 'metrics',
+      },
+      id: 'deepeval-aggregate',
+      name: 'DeepEval Aggregate',
+      type: 'n8n-nodes-deepeval.deepEvalAggregate',
+      typeVersion: 1,
+      position: [1920, 0],
+    },
+    {
+      parameters: {
+        resource: 'row',
+        operation: 'insert',
+        dataTableId: {
+          __rl: true,
+          mode: 'id',
+          value: 'REPLACE_WITH_RESULTS_DATA_TABLE_ID',
+        },
+        columns: {
+          mappingMode: 'defineBelow',
+          value: {
+            runId: '={{ $json.runId }}',
+            overallScore: '={{ $json.overallScore }}',
+            overallSuccess: '={{ $json.overallSuccess }}',
+            metrics: '={{ JSON.stringify($json.metrics) }}',
+          },
+          schema: [
+            {
+              id: 'runId',
+              displayName: 'runId',
+              type: 'string',
+              canBeUsedToMatch: true,
+            },
+            {
+              id: 'overallScore',
+              displayName: 'overallScore',
+              type: 'number',
+              canBeUsedToMatch: true,
+            },
+            {
+              id: 'overallSuccess',
+              displayName: 'overallSuccess',
+              type: 'boolean',
+              canBeUsedToMatch: true,
+            },
+            {
+              id: 'metrics',
+              displayName: 'metrics',
+              type: 'string',
+              canBeUsedToMatch: true,
+            },
+          ],
+        },
+        options: {},
+      },
+      id: 'persist-results',
+      name: 'Persist Results',
+      type: 'n8n-nodes-base.dataTable',
+      typeVersion: 1.1,
+      position: [2160, 0],
+    },
+    {
+      parameters: {
+        model: { __rl: true, mode: 'id', value: 'REPLACE_WITH_MODEL_ID' },
+        options: {
+          baseURL: 'http://127.0.0.1:8080/v1',
+          timeout: 120_000,
+          maxRetries: 0,
+        },
+      },
+      id: 'judge-model',
+      name: 'OpenAI Chat Model',
+      type: '@n8n/n8n-nodes-langchain.lmChatOpenAi',
+      typeVersion: 1.2,
+      position: [960, 280],
+      credentials: {
+        openAiApi: {
+          id: 'REPLACE_WITH_OPENAI_CREDENTIAL_ID',
+          name: 'Local OpenAI-compatible endpoint',
+        },
+      },
+    },
+    {
+      parameters: {},
+      id: 'calculator',
+      name: 'Calculator',
+      type: '@n8n/n8n-nodes-langchain.toolCalculator',
+      typeVersion: 1,
+      position: [1080, 280],
+    },
+  ];
+
+  if (conversational) {
+    nodes.push({
+      parameters: {
+        sessionIdType: 'customKey',
+        sessionKey: '={{ $json.evalContext.runId }}',
+        contextWindowLength: 10,
+      },
+      id: 'simple-memory',
+      name: 'Simple Memory',
+      type: '@n8n/n8n-nodes-langchain.memoryBufferWindow',
+      typeVersion: 1.3,
+      position: [1200, 280],
+    });
+  }
+
+  const metricYOffset = 120;
+  const metricBaseY = -((metrics.length - 1) * metricYOffset) / 2;
+
+  for (const [index, definition] of metrics.entries()) {
+    nodes.push({
+      parameters: exampleParameters(definition),
+      id: `metric-${definition.id}`,
+      name: definition.displayName,
+      type: nodeType(definition),
+      typeVersion: 1,
+      position: [1440, metricBaseY + index * metricYOffset],
+    });
+  }
+
+  const connections: Record<string, Record<string, unknown[][]>> = {
+    'When clicking Execute Workflow': {
+      main: [[{ node: 'Load Source Rows', type: 'main', index: 0 }]],
+    },
+    'Load Source Rows': {
+      main: [[{ node: 'DeepEval Trigger', type: 'main', index: 0 }]],
+    },
+    'DeepEval Trigger': {
+      main: [[{ node: 'Enrich Evaluation Data', type: 'main', index: 0 }]],
+    },
+    'Enrich Evaluation Data': {
+      main: [
+        [
+          { node: 'AI Agent', type: 'main', index: 0 },
+          { node: 'Prepare Metric Input', type: 'main', index: 0 },
+        ],
+      ],
+    },
+    'AI Agent': {
+      main: [[{ node: 'Prepare Metric Input', type: 'main', index: 1 }]],
+    },
+    'DeepEval Aggregate': {
+      main: [[{ node: 'Persist Results', type: 'main', index: 0 }]],
+    },
+    Calculator: {
+      ai_tool: [[{ node: 'AI Agent', type: 'ai_tool', index: 0 }]],
+    },
+    'OpenAI Chat Model': {
+      ai_languageModel: [
+        [
+          { node: 'AI Agent', type: 'ai_languageModel', index: 0 },
+          ...metrics
+            .filter((definition) => definition.requiresModel)
+            .map((definition) => ({
+              node: definition.displayName,
+              type: 'ai_languageModel',
+              index: 0,
+            })),
+        ],
+      ],
+    },
+  };
+
+  if (conversational) {
+    const firstMetric = metrics[0];
+    if (!firstMetric) {
+      throw new Error('Conversational kitchen sink requires at least one memory-backed metric');
+    }
+    connections['Prepare Metric Input'] = {
+      main: [[{ node: firstMetric.displayName, type: 'main', index: 0 }]],
+    };
+
+    for (const [index, definition] of metrics.entries()) {
+      const next = metrics[index + 1];
+      const targets: Array<{ node: string; type: string; index: number }> = [
+        { node: 'Collect Metric Results', type: 'main', index },
+      ];
+      if (next) {
+        targets.unshift({ node: next.displayName, type: 'main', index: 0 });
+      }
+      connections[definition.displayName] = {
+        main: [targets],
+      };
+    }
+  } else {
+    connections['Prepare Metric Input'] = {
+      main: [
+        metrics.map((definition) => ({
+          node: definition.displayName,
+          type: 'main',
+          index: 0,
+        })),
+      ],
+    };
+
+    for (const [index, definition] of metrics.entries()) {
+      connections[definition.displayName] = {
+        main: [[{ node: 'Collect Metric Results', type: 'main', index }]],
+      };
+    }
+  }
+
+  connections['Collect Metric Results'] = {
+    main: [[{ node: 'DeepEval Aggregate', type: 'main', index: 0 }]],
+  };
+
+  if (conversational) {
+    connections['Simple Memory'] = {
+      ai_memory: [
+        [
+          { node: 'AI Agent', type: 'ai_memory', index: 0 },
+          ...metrics.map((definition) => ({
+            node: definition.displayName,
+            type: 'ai_memory',
+            index: 0,
+          })),
+        ],
+      ],
+    };
+  }
+
+  return {
+    name: workflowName,
+    nodes,
+    connections,
+    settings: { executionOrder: 'v1' },
+    active: false,
+    pinData: {},
+    meta: { templateCredsSetupCompleted: false },
+    tags: [],
+  };
+}
+
 function aggregateWorkflow(): Record<string, unknown> {
   return {
     name: 'DeepEval Aggregate Example',
@@ -550,6 +932,35 @@ runNodeWorkflow('deepEvalTrigger', 'DeepEval Trigger');
 runNodeWorkflow('deepEvalAggregate', 'DeepEval Aggregate');
 `,
   );
+
+  const kitchenSinks = [
+    {
+      id: 'kitchenSinkNonConversational',
+      conversational: false,
+      expectedMetricCount: metricDefinitions.filter((definition) => !definition.requiresMemory)
+        .length,
+    },
+    {
+      id: 'kitchenSinkConversational',
+      conversational: true,
+      expectedMetricCount: metricDefinitions.filter((definition) => definition.requiresMemory)
+        .length,
+    },
+  ] as const;
+
+  for (const kitchenSink of kitchenSinks) {
+    await writeFile(
+      resolve(examplesRoot, `${kitchenSink.id}.workflow.json`),
+      `${JSON.stringify(kitchenSinkWorkflow(kitchenSink.conversational), null, 2)}\n`,
+    );
+    await writeFile(
+      resolve(e2eRoot, `${kitchenSink.id}.e2e.test.ts`),
+      `import { runKitchenSinkWorkflow } from '../harness.js';
+
+runKitchenSinkWorkflow('${kitchenSink.id}', ${kitchenSink.expectedMetricCount});
+`,
+    );
+  }
 
   const packagePath = resolve(nodesRoot, 'package.json');
   const packageJson = JSON.parse(await readFile(packagePath, 'utf8')) as Record<string, unknown>;

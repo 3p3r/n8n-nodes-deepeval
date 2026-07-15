@@ -41,6 +41,30 @@ class N8nJudgeModel(DeepEvalBaseLLM):
             payload["reason"] = reason.group(1).replace("\\n", " ").replace("\\r", " ")
         return payload
 
+    def _repair_invalid_escapes(self, blob):
+        out = []
+        in_string = False
+        escape = False
+        for char in blob:
+            if escape:
+                if char in ('"', '\\\\', '/', 'b', 'f', 'n', 'r', 't', 'u'):
+                    out.append('\\\\')
+                    out.append(char)
+                else:
+                    out.append('\\\\\\\\')
+                    out.append(char)
+                escape = False
+                continue
+            if char == "\\\\" and in_string:
+                escape = True
+                continue
+            if char == '"':
+                in_string = not in_string
+                out.append(char)
+                continue
+            out.append(char)
+        return "".join(out)
+
     def _load_json_text(self, text):
         from deepeval.metrics.utils import trimAndLoadJson
 
@@ -75,13 +99,17 @@ class N8nJudgeModel(DeepEvalBaseLLM):
                 if not in_string and ord(char) < 32 and char not in "\\n\\r\\t":
                     continue
                 fixed.append(char)
+            repaired = "".join(fixed)
             try:
-                return json.loads("".join(fixed))
+                return json.loads(repaired)
             except json.JSONDecodeError:
-                salvaged = self._salvage_json_text(text)
-                if salvaged is None:
-                    raise
-                return salvaged
+                try:
+                    return json.loads(self._repair_invalid_escapes(repaired))
+                except json.JSONDecodeError:
+                    salvaged = self._salvage_json_text(text)
+                    if salvaged is None:
+                        raise
+                    return salvaged
 
     async def a_generate(self, prompt, schema=None, *args, **kwargs):
         schema_json = None

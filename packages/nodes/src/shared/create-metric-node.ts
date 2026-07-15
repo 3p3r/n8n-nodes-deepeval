@@ -152,6 +152,17 @@ async function buildTestCase(
   return testCase;
 }
 
+let memoryBackedMetricQueue: Promise<void> = Promise.resolve();
+
+function enqueueMemoryBackedMetric<T>(work: () => Promise<T>): Promise<T> {
+  const execution = memoryBackedMetricQueue.then(work);
+  memoryBackedMetricQueue = execution.then(
+    () => undefined,
+    () => undefined,
+  );
+  return execution;
+}
+
 function nodeInputs(definition: MetricDefinition): INodeInputConfiguration[] {
   return [
     { type: NodeConnectionTypes.Main, displayName: 'Input', required: true },
@@ -204,7 +215,7 @@ export function createMetricNode(definition: MetricDefinition): new () => INodeT
       const output: INodeExecutionData[] = [];
 
       for (const [itemIndex, item] of items.entries()) {
-        try {
+        const runItem = async (): Promise<void> => {
           const json = item.json as Record<string, unknown>;
           const testCase = await buildTestCase(this, definition, json, itemIndex);
           const model = definition.requiresModel
@@ -234,6 +245,14 @@ export function createMetricNode(definition: MetricDefinition): new () => INodeT
             },
             pairedItem: { item: itemIndex },
           });
+        };
+
+        try {
+          if (definition.requiresMemory) {
+            await enqueueMemoryBackedMetric(runItem);
+          } else {
+            await runItem();
+          }
         } catch (error) {
           if (this.continueOnFail()) {
             output.push({

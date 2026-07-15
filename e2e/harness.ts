@@ -55,8 +55,9 @@ async function api<T>(
 async function waitForExecution(
   context: DeepEvalE2EContext,
   executionId: string,
+  timeoutMs = 840_000,
 ): Promise<ExecutionResponse> {
-  const deadline = Date.now() + 840_000;
+  const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const execution = await api<ExecutionResponse>(
       context,
@@ -96,6 +97,8 @@ async function assertAggregatePersistence(
   );
   expect(result.data.some((row) => row.runId === runId)).toBe(true);
 }
+
+const kitchenSinkExecutionTimeoutMs = 3_600_000;
 
 export function runNodeWorkflow(workflowId: string, displayName: string): void {
   describe(displayName, () => {
@@ -164,5 +167,82 @@ export function runNodeWorkflow(workflowId: string, displayName: string): void {
         await api(context, `/rest/workflows/${created.id}`, { method: 'DELETE' });
       }
     });
+  });
+}
+
+export function runKitchenSinkWorkflow(workflowId: string, expectedMetricCount: number): void {
+  const displayName =
+    workflowId === 'kitchenSinkConversational'
+      ? 'Conversational Kitchen Sink'
+      : 'Non-Conversational Kitchen Sink';
+
+  describe(displayName, () => {
+    it(
+      'executes all class metrics through Trigger and Aggregate',
+      async () => {
+        const context = inject('deepevalE2E');
+        const workflowPath = resolve(
+          root,
+          'packages/nodes/examples',
+          `${workflowId}.workflow.json`,
+        );
+        const source = JSON.parse(await readFile(workflowPath, 'utf8')) as WorkflowDefinition;
+        const workflow = prepareWorkflow(source, context);
+        const created = await api<{ id: string }>(context, '/rest/workflows', {
+          method: 'POST',
+          body: JSON.stringify(workflow),
+        });
+
+        try {
+          const run = await api<{ executionId: string }>(
+            context,
+            `/rest/workflows/${created.id}/run`,
+            {
+              method: 'POST',
+              body: JSON.stringify({
+                destinationNode: {
+                  nodeName: 'Persist Results',
+                  mode: 'inclusive',
+                },
+              }),
+            },
+          );
+          const execution = await waitForExecution(
+            context,
+            run.executionId,
+            kitchenSinkExecutionTimeoutMs,
+          );
+          const aggregateOutput = executionOutput(execution, 'DeepEval Aggregate');
+          const persistOutput = executionOutput(execution, 'Persist Results');
+
+          expect(aggregateOutput.length).toBeGreaterThan(0);
+          expect(persistOutput.length).toBeGreaterThan(0);
+
+          const metrics = aggregateOutput[0]?.metrics;
+          expect(Array.isArray(metrics)).toBe(true);
+          expect(metrics).toHaveLength(expectedMetricCount);
+
+          for (const metric of metrics as Array<Record<string, unknown>>) {
+            expect(typeof metric.metric).toBe('string');
+            expect(typeof metric.score).toBe('number');
+            expect(Number.isFinite(metric.score)).toBe(true);
+            expect(typeof metric.success).toBe('boolean');
+            expect(metric.reason === null || typeof metric.reason === 'string').toBe(true);
+          }
+
+          expect(typeof aggregateOutput[0]?.score).toBe('number');
+          expect(typeof aggregateOutput[0]?.success).toBe('boolean');
+          expect(typeof aggregateOutput[0]?.runId).toBe('string');
+          await assertAggregatePersistence(context, String(aggregateOutput[0]?.runId));
+        } finally {
+          await api(context, `/rest/workflows/${created.id}/archive`, {
+            method: 'POST',
+            body: JSON.stringify({}),
+          });
+          await api(context, `/rest/workflows/${created.id}`, { method: 'DELETE' });
+        }
+      },
+      kitchenSinkExecutionTimeoutMs + 300_000,
+    );
   });
 }

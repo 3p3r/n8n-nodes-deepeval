@@ -9,6 +9,9 @@ Aggregate.
   - [Architecture](#architecture)
     - [Required N8N Nodes](#required-n8n-nodes)
     - [Optional Dashboard](#optional-dashboard)
+  - [Kitchen-sink examples](#kitchen-sink-examples)
+    - [Non-conversational kitchen sink](#non-conversational-kitchen-sink)
+    - [Conversational kitchen sink](#conversational-kitchen-sink)
   - [Available Nodes](#available-nodes)
     - [n8n → DeepEval field mapping](#n8n--deepeval-field-mapping)
     - [DeepEval Trigger](#deepeval-trigger)
@@ -91,6 +94,54 @@ Offered as N8N community nodes, these are the core components that allow you to 
 
 The dashboard is not included in this implementation. No frontend injection, hooks,
 parallel database, or transparent recording behavior is installed.
+
+## Kitchen-sink examples
+
+Two importable stress-test workflows exercise the full evaluation pipeline end to end:
+**DeepEval Trigger** loads one dataset row, **Enrich Evaluation Data** adds fixture fields
+the source table does not carry, **AI Agent** (with Calculator and shared judge model) produces
+agent output and traces, metrics score through **DeepEval Aggregate**, and **Persist Results**
+writes the run to a Data Table.
+
+Use them to validate wiring, Pyodide throughput, judge-model fan-out, and Aggregate
+fan-in under realistic load.
+
+### Non-conversational kitchen sink
+
+[`packages/nodes/examples/kitchenSinkNonConversational.workflow.json`](packages/nodes/examples/kitchenSinkNonConversational.workflow.json)
+runs all **20** single-turn and agentic metrics (`requiresMemory: false`):
+
+G-Eval, DAG, Task Completion, Step Efficiency, Argument Correctness, Tool Correctness,
+Plan Adherence, Plan Quality, Bias, Toxicity, Non-Advice, Misuse, PII Leakage, Role
+Violation, Summarization, Prompt Alignment, Hallucination, Citation Faithfulness, Agent
+Loop Detection, and Tool Permission.
+
+Shared infrastructure: one OpenAI Chat Model sub-node wired to AI Agent and every
+LLM-judge metric; Calculator on AI Agent for trace-dependent metrics; Trigger limited to
+one row so the stress is metric fan-out, not dataset size. Metrics fan out in parallel from
+**Prepare Metric Input** into **Collect Metric Results** (Merge append).
+
+![Non-conversational kitchen sink example workflow](docs/kitchenSinkNonConversational.example.png)
+
+### Conversational kitchen sink
+
+[`packages/nodes/examples/kitchenSinkConversational.workflow.json`](packages/nodes/examples/kitchenSinkConversational.workflow.json)
+runs all **13** conversational and turn-based metrics (`requiresMemory: true`):
+
+Conversational G-Eval, Conversational DAG, Turn Relevancy, Role Adherence, Knowledge
+Retention, Conversation Completeness, Goal Accuracy, Tool Use, Topic Adherence, Turn
+Faithfulness, Turn Contextual Precision, Turn Contextual Recall, and Turn Contextual
+Relevancy.
+
+Same Trigger → enrich → Agent → Aggregate → Persist pipeline as the non-conversational
+sink, plus **Simple Memory** shared by AI Agent and every conversational metric (session key
+`={{ $json.evalContext.runId }}` so each Trigger run gets an isolated buffer). Calculator
+remains on AI Agent for Goal Accuracy and Tool Use. Metrics run **sequentially** on the main
+path (each passes the enriched item forward) while **Collect Metric Results** still gathers
+every score for Aggregate — shared Memory cannot safely fan out to all conversational metrics
+in parallel inside n8n.
+
+![Conversational kitchen sink example workflow](docs/kitchenSinkConversational.example.png)
 
 ## Available Nodes
 
@@ -760,7 +811,12 @@ after Aggregate. Google Sheets and Excel sinks are deferred.
 
 #### Typical wiring
 
-**Batch eval** (dataset-driven):
+**Batch eval** (dataset-driven): import
+[`kitchenSinkNonConversational.workflow.json`](packages/nodes/examples/kitchenSinkNonConversational.workflow.json)
+for a full single-turn and agentic benchmark, or
+[`kitchenSinkConversational.workflow.json`](packages/nodes/examples/kitchenSinkConversational.workflow.json)
+for all Memory-backed metrics. Both wire `Data Table (Get rows) → DeepEval Trigger → enrich →
+AI Agent → parallel metrics → DeepEval Aggregate → Data Table (insert)`.
 
 **Live chat eval** (conversational metrics — Memory required):
 

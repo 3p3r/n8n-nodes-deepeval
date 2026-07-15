@@ -247,7 +247,12 @@ export async function startN8nSession(): Promise<N8nSession> {
     await api(`/rest/projects/${personalProject.id}/data-tables/${sourceTable.id}/insert`, {
       method: 'POST',
       body: JSON.stringify({
-        data: [{ input: 'What is 2 + 2?', expectedOutput: '4' }],
+        data: [
+          {
+            input: 'Use the calculator when appropriate, then answer: what is 2 + 2?',
+            expectedOutput: 'The answer is 4.',
+          },
+        ],
         returnType: 'all',
       }),
     });
