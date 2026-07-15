@@ -5,6 +5,7 @@ Aggregate.
 
 - [n8n-nodes-deepeval](#n8n-nodes-deepeval)
   - [Synopsis](#synopsis)
+    - [Install](#install)
   - [Architecture](#architecture)
     - [Required N8N Nodes](#required-n8n-nodes)
     - [Optional Dashboard](#optional-dashboard)
@@ -65,7 +66,7 @@ category and are searchable with the `DeepEval Benchmarking` alias.
 The current package intentionally contains only the n8n nodes. The dashboard, dashboard
 hooks, Google Sheets adapters, and Microsoft Excel adapters are deferred.
 
-### Install and build
+### Install
 
 Install the published community package in n8n:
 
@@ -73,44 +74,14 @@ Install the published community package in n8n:
 npm install n8n-nodes-deepeval
 ```
 
-For repository development, use npm only:
-
-```sh
-npm ci
-npm run build
-npm run typecheck
-npm run lint
-npm test
-```
-
-The first Moon build runs `root:vendor` automatically. It downloads pinned DeepEval
-4.0.7 and Pyodide 0.27.7 sources, applies the compatibility patches, verifies checksums,
-and builds local wheels. These generated assets are gitignored but included in the
-published package, so installed nodes do not download Python packages at runtime. Run
-`npm run vendor` directly only when explicitly refreshing the generated assets.
-
-Importable examples for every concrete node are in `packages/nodes/examples`. The
-end-to-end suite imports and executes those workflows through a real npm-installed n8n
-process.
-
-The Moon E2E task downloads the pinned Mozilla
-`Ministral-3-3B-Instruct-2512-Q4_K_M.llamafile` and Cosmopolitan APE loader into the
-gitignored `.llamafile` directory, verifies SHA-256 checksums, and runs the llamafile
-OpenAI-compatible server locally. Tests use only this local model with
-`sk-no-key-required`; there is no remote inference endpoint or environment-variable
-override. Generated examples default to `http://127.0.0.1:8080/v1`.
+Repository development, testing, and contributor workflows are documented in [AGENTS.md](AGENTS.md).
 
 ## Architecture
 
-DeepEval executes inline through the vendored
-[Pyodide](https://github.com/pyodide/pyodide) runtime. Package loading starts one
-module-scoped initialization promise. Evaluations in a process reuse that warmed VM and
-are serialized through one queue. n8n queue workers are separate processes, so each
-worker gets one independent warmed runtime.
-
-Pyodide and the Python wheel set are included in the package for offline execution.
-Initialization is memory-intensive, and evaluations are intentionally serialized because
-the Python VM is not re-entrant. Plan worker memory and throughput around this constraint.
+DeepEval executes inline through an embedded Python runtime bundled with the package.
+Evaluations run in-process with n8n; plan worker memory and throughput around
+initialization cost and serialized execution. See [AGENTS.md](AGENTS.md) for implementation
+details (Pyodide, vendoring, E2E).
 
 ### Required N8N Nodes
 
@@ -174,11 +145,7 @@ instead of bypassing that access control.
 - `maxRows` — maximum rows when `limitRows` is enabled
 - `filters` — optional column=value filters on the dataset
 
-```text
-[ Data Table: Get rows ] ──► [ DeepEval Trigger ] ──┬── input / expectedOutput / …
-                                                    ├── evalContext (runId, runName, isEvalRun, rowId)
-                                                    └── one item per dataset row
-```
+![DeepEval Trigger example workflow](docs/deepEvalTrigger.example.png)
 
 #### Sources
 
@@ -208,12 +175,7 @@ Uses LLM-as-a-judge with chain-of-thought to score an output against any criteri
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — print intermediate steps to console
 
-```text
-input ─────────────┐
-actualOutput ──────┼── [ G-Eval ] ──┬── score
-aiLanguageModel ───┘                ├── reason
-                                    └── success
-```
+![DeepEval G-Eval example workflow](docs/gEval.example.png)
 
 ##### [DAG](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28custom%29/metrics-dag.mdx)
 
@@ -229,12 +191,7 @@ Runs a deep acyclic graph of LLM-powered decision nodes for deterministic, rule-
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — log each node verdict
 
-```text
-input ─────────────┐
-actualOutput ──────┼── [ DAG ] ───┬── score
-aiLanguageModel ───┘              ├── reason
-                                  └── success
-```
+![DeepEval DAG example workflow](docs/dag.example.png)
 
 ##### [Conversational G-Eval](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28custom%29/metrics-conversational-g-eval.mdx)
 
@@ -252,12 +209,7 @@ G-Eval adapted for full conversations: scores the entire dialogue against custom
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — print intermediate steps to console
 
-```text
-aiMemory ────────────┐
-aiLanguageModel ─────┼── [ Conversational G-Eval ] ──┬── score
-                     │                               ├── reason
-                     │                               └── success
-```
+![DeepEval Conversational G-Eval example workflow](docs/conversationalGEval.example.png)
 
 Connect the same Memory as AI Agent.
 
@@ -275,12 +227,7 @@ DAG adapted for multi-turn evaluation: deterministic decision trees over convers
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — log each node verdict
 
-```text
-aiMemory ────────────┐
-aiLanguageModel ─────┼── [ Conversational DAG ] ──┬── score
-                     │                            ├── reason
-                     │                            └── success
-```
+![DeepEval Conversational DAG example workflow](docs/conversationalDAG.example.png)
 
 Connect the same Memory as AI Agent.
 
@@ -301,13 +248,7 @@ Judges whether the agent accomplished the task by aligning the extracted outcome
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — print intermediate steps to console
 
-```text
-input ─────────────┐
-output ────────────┤
-intermediateSteps ─┼── [ Task Completion ] ───┬── score
-aiLanguageModel ───┘                          ├── reason
-                                              └── success
-```
+![DeepEval Task Completion example workflow](docs/taskCompletion.example.png)
 
 Connect **AI Agent** on main (with **Return Intermediate Steps**). Maps to DeepEval `input`, `actual_output`, and a synthetic trace from `intermediateSteps`. DeepEval infers `task` from the trace when not set in Config.
 
@@ -323,13 +264,7 @@ Measures how efficiently the agent completed the task, penalizing unnecessary st
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — print intermediate steps to console
 
-```text
-input ─────────────┐
-output ────────────┤
-intermediateSteps ─┼── [ Step Efficiency ] ───┬── score
-aiLanguageModel ───┘                          ├── reason
-                                              └── success
-```
+![DeepEval Step Efficiency example workflow](docs/stepEfficiency.example.png)
 
 Trace-only in DeepEval. Requires synthetic trace from `intermediateSteps`; fails clearly if intermediate steps are absent.
 
@@ -345,13 +280,7 @@ Checks whether each tool call received correct arguments for the user request (r
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — print intermediate steps to console
 
-```text
-input ─────────────┐
-output ────────────┤
-intermediateSteps ─┼── [ Argument Correctness ] ───┬── score
-aiLanguageModel ───┘                               ├── reason
-                                                   └── success
-```
+![DeepEval Argument Correctness example workflow](docs/argumentCorrectness.example.png)
 
 Maps `input` → DeepEval `input`, `output` → `actual_output`, `intermediateSteps` → `tools_called`.
 
@@ -371,14 +300,7 @@ Compares tools the agent called against expected tools (selection, order, and op
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — print intermediate steps to console
 
-```text
-input ─────────────┐
-output ────────────┤
-intermediateSteps ─┤
-expectedTools ─────┼── [ Tool Correctness ] ──┬── score
-aiLanguageModel ───┘                          ├── reason
-                                              └── success
-```
+![DeepEval Tool Correctness example workflow](docs/toolCorrectness.example.png)
 
 Maps `input`, `intermediateSteps` → `tools_called`, and `expectedTools` → `expected_tools`. `expectedTools` may come from the Trigger column mapping or another upstream field.
 
@@ -394,13 +316,7 @@ Scores how closely the agent's execution followed the plan inferred from its rea
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — print intermediate steps to console
 
-```text
-input ─────────────┐
-output ────────────┤
-intermediateSteps ─┼── [ Plan Adherence ] ──┬── score
-aiLanguageModel ───┘                        ├── reason
-                                            └── success
-```
+![DeepEval Plan Adherence example workflow](docs/planAdherence.example.png)
 
 Trace-only. Synthetic trace from `intermediateSteps`. When DeepEval finds no plan in the trace, score defaults to `1`.
 
@@ -416,13 +332,7 @@ Scores the quality of the plan itself (task vs. plan alignment), independent of 
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — print intermediate steps to console
 
-```text
-input ─────────────┐
-output ────────────┤
-intermediateSteps ─┼── [ Plan Quality ] ──┬── score
-aiLanguageModel ───┘                      ├── reason
-                                          └── success
-```
+![DeepEval Plan Quality example workflow](docs/planQuality.example.png)
 
 Trace-only. Synthetic trace from `intermediateSteps`. When DeepEval finds no plan in the trace, score defaults to `1`.
 
@@ -443,12 +353,7 @@ Checks that each assistant reply stays relevant given prior turns in a sliding w
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — print intermediate steps to console
 
-```text
-aiMemory ────────────┐
-aiLanguageModel ─────┼── [ Turn Relevancy ] ──┬── score
-                     │                        ├── reason
-                     │                        └── success
-```
+![DeepEval Turn Relevancy example workflow](docs/turnRelevancy.example.png)
 
 Connect the same Memory as AI Agent.
 
@@ -464,12 +369,7 @@ Measures whether the assistant stayed in character across every turn against a d
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — print intermediate steps to console
 
-```text
-aiMemory ────────────┐
-aiLanguageModel ─────┼── [ Role Adherence ] ──┬── score
-                     │                        ├── reason
-                     │                        └── success
-```
+![DeepEval Role Adherence example workflow](docs/roleAdherence.example.png)
 
 Connect the same Memory as AI Agent.
 
@@ -487,12 +387,7 @@ Detects when the bot forgets facts the user already provided earlier in the conv
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — print intermediate steps to console
 
-```text
-aiMemory ────────────┐
-aiLanguageModel ─────┼── [ Knowledge Retention ] ──┬── score
-                     │                             ├── reason
-                     │                             └── success
-```
+![DeepEval Knowledge Retention example workflow](docs/knowledgeRetention.example.png)
 
 Connect the same Memory as AI Agent.
 
@@ -509,12 +404,7 @@ Checks whether all user intentions raised in the dialogue were satisfied by the 
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — print intermediate steps to console
 
-```text
-aiMemory ────────────┐
-aiLanguageModel ─────┼── [ Conversation Completeness ] ──┬── score
-                     │                                   ├── reason
-                     │                                   └── success
-```
+![DeepEval Conversation Completeness example workflow](docs/conversationCompleteness.example.png)
 
 Connect the same Memory as AI Agent.
 
@@ -530,12 +420,7 @@ Evaluates whether the agent reached the user's goal and how well its plan and st
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — print intermediate steps to console
 
-```text
-aiMemory ────────────┐
-aiLanguageModel ─────┼── [ Goal Accuracy ] ──┬── score
-                     │                       ├── reason
-                     │                       └── success
-```
+![DeepEval Goal Accuracy example workflow](docs/goalAccuracy.example.png)
 
 Connect the same Memory as AI Agent.
 
@@ -554,12 +439,7 @@ Scores tool selection and argument correctness per interaction against available
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — print intermediate steps to console
 
-```text
-aiMemory ────────────┐
-aiLanguageModel ─────┼── [ Tool Use ] ──┬── score
-                     │                  ├── reason
-                     │                  └── success
-```
+![DeepEval Tool Use example workflow](docs/toolUse.example.png)
 
 Connect the same Memory as AI Agent.
 
@@ -578,12 +458,7 @@ Penalizes answers to off-topic questions and rewards correct refusals when a que
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — print intermediate steps to console
 
-```text
-aiMemory ────────────┐
-aiLanguageModel ─────┼── [ Topic Adherence ] ──┬── score
-                     │                         ├── reason
-                     │                         └── success
-```
+![DeepEval Topic Adherence example workflow](docs/topicAdherence.example.png)
 
 Connect the same Memory as AI Agent.
 
@@ -602,12 +477,7 @@ Verifies assistant claims are grounded in `retrievalContext` attached to turns (
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — print intermediate steps to console
 
-```text
-aiMemory ────────────┐
-aiLanguageModel ─────┼── [ Turn Faithfulness ] ──┬── score
-                     │                           ├── reason
-                     │                           └── success
-```
+![DeepEval Turn Faithfulness example workflow](docs/turnFaithfulness.example.png)
 
 Connect the same Memory as AI Agent.
 
@@ -626,12 +496,7 @@ Measures whether relevant retrieval nodes are ranked above irrelevant ones per t
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — print intermediate steps to console
 
-```text
-aiMemory ────────────┐
-aiLanguageModel ─────┼── [ Turn Contextual Precision ] ──┬── score
-                     │                                   ├── reason
-                     │                                   └── success
-```
+![DeepEval Turn Contextual Precision example workflow](docs/turnContextualPrecision.example.png)
 
 Connect the same Memory as AI Agent.
 
@@ -650,12 +515,7 @@ Checks whether retrieved context per turn contains enough information to support
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — print intermediate steps to console
 
-```text
-aiMemory ────────────┐
-aiLanguageModel ─────┼── [ Turn Contextual Recall ] ──┬── score
-                     │                                ├── reason
-                     │                                └── success
-```
+![DeepEval Turn Contextual Recall example workflow](docs/turnContextualRecall.example.png)
 
 Connect the same Memory as AI Agent.
 
@@ -674,12 +534,7 @@ Measures signal-to-noise in each turn's `retrievalContext` relative to the user'
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — print intermediate steps to console
 
-```text
-aiMemory ────────────┐
-aiLanguageModel ─────┼── [ Turn Contextual Relevancy ] ──┬── score
-                     │                                   ├── reason
-                     │                                   └── success
-```
+![DeepEval Turn Contextual Relevancy example workflow](docs/turnContextualRelevancy.example.png)
 
 Connect the same Memory as AI Agent.
 
@@ -699,12 +554,7 @@ Detects gender, racial, political, or geographical bias in opinions expressed in
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — print intermediate steps to console
 
-```text
-input ─────────────┐
-actualOutput ──────┼── [ Bias ] ──┬── score
-aiLanguageModel ───┘              ├── reason
-                                  └── success
-```
+![DeepEval Bias example workflow](docs/bias.example.png)
 
 ##### [Toxicity](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28safety%29/metrics-toxicity.mdx)
 
@@ -718,12 +568,7 @@ Flags toxic opinions (attacks, mockery, hate, threats). Lower scores are safer; 
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — print intermediate steps to console
 
-```text
-input ─────────────┐
-actualOutput ──────┼── [ Toxicity ] ──┬── score
-aiLanguageModel ───┘                  ├── reason
-                                      └── success
-```
+![DeepEval Toxicity example workflow](docs/toxicity.example.png)
 
 ##### [Non-Advice](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28safety%29/metrics-non-advice.mdx)
 
@@ -738,12 +583,7 @@ Detects inappropriate professional advice (financial, medical, legal, and so on)
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — print intermediate steps to console
 
-```text
-input ─────────────┐
-actualOutput ──────┼── [ Non-Advice ] ──┬── score
-aiLanguageModel ───┘                    ├── reason
-                                        └── success
-```
+![DeepEval Non-Advice example workflow](docs/nonAdvice.example.png)
 
 ##### [Misuse](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28safety%29/metrics-misuse.mdx)
 
@@ -758,12 +598,7 @@ Flags when a domain-specific bot answers off-topic or general-knowledge requests
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — print intermediate steps to console
 
-```text
-input ─────────────┐
-actualOutput ──────┼── [ Misuse ] ──┬── score
-aiLanguageModel ───┘                ├── reason
-                                    └── success
-```
+![DeepEval Misuse example workflow](docs/misuse.example.png)
 
 ##### [PII Leakage](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28safety%29/metrics-pii-leakage.mdx)
 
@@ -777,12 +612,7 @@ Detects personally identifiable information exposed in the output (names, financ
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — print intermediate steps to console
 
-```text
-input ─────────────┐
-actualOutput ──────┼── [ PII Leakage ] ──┬── score
-aiLanguageModel ───┘                     ├── reason
-                                         └── success
-```
+![DeepEval PII Leakage example workflow](docs/piiLeakage.example.png)
 
 ##### [Role Violation](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28safety%29/metrics-role-violation.mdx)
 
@@ -799,12 +629,7 @@ Binary check for a single-turn output breaking the assigned role or persona (bre
 
 Upstream DeepEval docs describe `strictMode` inconsistently (Bias-style “0 for perfection” vs higher-is-safer FAQ). This node follows higher-is-safer semantics and pins `strictMode` to threshold `1` accordingly.
 
-```text
-input ─────────────┐
-actualOutput ──────┼── [ Role Violation ] ──┬── score
-aiLanguageModel ───┘                        ├── reason
-                                            └── success
-```
+![DeepEval Role Violation example workflow](docs/roleViolation.example.png)
 
 #### Others
 
@@ -825,12 +650,7 @@ Scores whether a summary is factually aligned with the source and covers require
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — print intermediate steps to console
 
-```text
-input ─────────────┐
-actualOutput ──────┼── [ Summarization ] ──┬── score
-aiLanguageModel ───┘                       ├── reason
-                                           └── success
-```
+![DeepEval Summarization example workflow](docs/summarization.example.png)
 
 ##### [Prompt Alignment](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28metrics-others%29/metrics-prompt-alignment.mdx)
 
@@ -845,12 +665,7 @@ Checks whether the output follows each instruction listed in your prompt templat
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — print intermediate steps to console
 
-```text
-input ─────────────┐
-actualOutput ──────┼── [ Prompt Alignment ] ──┬── score
-aiLanguageModel ───┘                          ├── reason
-                                              └── success
-```
+![DeepEval Prompt Alignment example workflow](docs/promptAlignment.example.png)
 
 ##### [Hallucination](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28metrics-others%29/metrics-hallucination.mdx)
 
@@ -864,13 +679,7 @@ Measures contradictions between the output and ground-truth `context`. Lower sco
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — print intermediate steps to console
 
-```text
-input ─────────────┐
-actualOutput ──────┤
-context ───────────┼── [ Hallucination ] ──┬── score
-aiLanguageModel ───┘                       ├── reason
-                                           └── success
-```
+![DeepEval Hallucination example workflow](docs/hallucination.example.png)
 
 #### Community
 
@@ -888,13 +697,7 @@ Stricter than Faithfulness: every `[N]` citation in the output must point to the
 - `asyncMode` — run internal LLM calls concurrently (default `true`)
 - `verboseMode` — print intermediate steps to console
 
-```text
-input ─────────────┐
-actualOutput ──────┤
-retrievalContext ──┼── [ Citation Faithfulness ] ───┬── score
-aiLanguageModel ───┘                                ├── reason
-                                                    └── success
-```
+![DeepEval Citation Faithfulness example workflow](docs/citationFaithfulness.example.png)
 
 ##### [Agent Loop Detection](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/%28community%29/metrics-agent-loop-detection.mdx)
 
@@ -912,13 +715,7 @@ Deterministic detection of infinite loops in an agent trace (tool repetition, re
 - `strictMode` — binary 1/0 scoring; forces threshold to `1`
 - `verboseMode` — print intermediate steps to console
 
-```text
-input ─────────────┐
-output ────────────┤
-intermediateSteps ─┼──► [ Agent Loop Detection ] ──┬── score
-                   │                               ├── reason
-                   │                               └── success
-```
+![DeepEval Agent Loop Detection example workflow](docs/agentLoopDetection.example.png)
 
 Trace-only and deterministic. Maps `intermediateSteps` to a synthetic DeepEval trace. No Language Model sub-node. Fails clearly if intermediate steps are missing.
 
@@ -935,12 +732,7 @@ Enforces least privilege: flags any tool call outside an allowlist or on a denyl
 - `strictMode` — binary 1/0 scoring; forces threshold to `1`
 - `verboseMode` — print intermediate steps to console
 
-```text
-input ─────────────┐
-intermediateSteps ─┼──► [ Tool Permission ] ──┬── score
-                   │                          ├── reason
-                   │                          └── success
-```
+![DeepEval Tool Permission example workflow](docs/toolPermission.example.png)
 
 Maps `intermediateSteps` → DeepEval `tools_called`. No Language Model sub-node. No `asyncMode` (deterministic, synchronous in DeepEval).
 
@@ -959,13 +751,7 @@ Table node. The importable example persists that row with
 - `metrics` — which incoming metric nodes to include (`allConnected` or explicit list)
 - `passRule` — overall `success` rule (`allPass`, `anyFail`, and so on)
 
-```text
-metricA {score,reason,success} ──┐
-metricB {score,reason,success} ──┼── [ DeepEval Aggregate ] ──► [ Data Table: Insert ]
-metricN {score,reason,success} ──┘             │
-                                               ├── overall score / success
-                                               └── per-metric fields
-```
+![DeepEval Aggregate example workflow](docs/deepEvalAggregate.example.png)
 
 #### Sinks
 
@@ -976,23 +762,6 @@ after Aggregate. Google Sheets and Excel sinks are deferred.
 
 **Batch eval** (dataset-driven):
 
-```text
-[Data Table: Get] ──► [DeepEval Trigger] ──┐
-                                           ├──► [merge] ──► [AI Agent] ──► branch on isEvalRun
-[Chat / Webhook] ──────────────────────────┘                                 │
-                                                                             ├─ prod → downstream
-                                                                             └─ eval → [metric…] ──► [Aggregate] ──► [Data Table: Insert]
-```
-
 **Live chat eval** (conversational metrics — Memory required):
-
-```text
-[Chat Trigger] ──main──► [AI Agent] ──main──► [conversational metric…] ──► [DeepEval Aggregate] ──► sink
-
-[Simple Memory] ──ai_memory──► [AI Agent]
-              └─ai_memory──► [conversational metric…]
-
-[Judge Language Model] ──aiLanguageModel──► [conversational metric…]
-```
 
 Connect the **same Memory** sub-node to AI Agent and to each conversational / turn-based metric. Enable **Return Intermediate Steps** on AI Agent when using Goal Accuracy, Tool Use, or other metrics that enrich turns from `intermediateSteps`.

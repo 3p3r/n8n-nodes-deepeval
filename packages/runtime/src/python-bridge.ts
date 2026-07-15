@@ -32,10 +32,10 @@ class N8nJudgeModel(DeepEvalBaseLLM):
     def _salvage_json_text(self, text):
         import re
 
-        score = re.search(r'"score"\s*:\s*([-+]?[0-9]*\.?[0-9]+)', text)
+        score = re.search(r'"score"s*:s*([-+]?[0-9]*.?[0-9]+)', text)
         if score is None:
             return None
-        reason = re.search(r'"reason"\s*:\s*"(.*?)"\s*[,}]', text, re.DOTALL)
+        reason = re.search(r'"reason"s*:s*"(.*?)"s*[,}]', text, re.DOTALL)
         payload = {"score": float(score.group(1)), "reason": ""}
         if reason is not None:
             payload["reason"] = reason.group(1).replace("\\n", " ").replace("\\r", " ")

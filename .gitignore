@@ -9,6 +9,8 @@ packages/runtime/assets/
 .llamafile/
 .moon/cache/
 
+.capture-session.json
+
 # Logs
 logs
 *.log
