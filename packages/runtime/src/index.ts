@@ -2,6 +2,7 @@ export { memoryToTurns } from './memory-adapter.js';
 export { createJudgeCallback } from './model-adapter.js';
 export {
   evaluateDeepEval,
+  getPyodidePoolSize,
   getRuntimeDiagnostics,
   prewarmDeepEval,
 } from './runtime.js';

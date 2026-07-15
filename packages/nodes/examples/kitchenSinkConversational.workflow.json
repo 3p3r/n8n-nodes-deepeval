@@ -277,7 +277,8 @@
         "threshold": 0.5,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-conversationalGEval",
       "name": "DeepEval Conversational G-Eval",
@@ -293,7 +294,8 @@
         "includeReason": true,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-conversationalDAG",
       "name": "DeepEval Conversational DAG",
@@ -308,7 +310,8 @@
         "includeReason": true,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-turnRelevancy",
       "name": "DeepEval Turn Relevancy",
@@ -323,7 +326,8 @@
         "includeReason": true,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-roleAdherence",
       "name": "DeepEval Role Adherence",
@@ -337,7 +341,8 @@
         "includeReason": true,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-knowledgeRetention",
       "name": "DeepEval Knowledge Retention",
@@ -352,7 +357,8 @@
         "includeReason": true,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-conversationCompleteness",
       "name": "DeepEval Conversation Completeness",
@@ -366,7 +372,8 @@
         "includeReason": true,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-goalAccuracy",
       "name": "DeepEval Goal Accuracy",
@@ -381,7 +388,8 @@
         "includeReason": true,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-toolUse",
       "name": "DeepEval Tool Use",
@@ -396,7 +404,8 @@
         "includeReason": true,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-topicAdherence",
       "name": "DeepEval Topic Adherence",
@@ -413,7 +422,8 @@
         "includeReason": false,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-turnFaithfulness",
       "name": "DeepEval Turn Faithfulness",
@@ -429,7 +439,8 @@
         "includeReason": true,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-turnContextualPrecision",
       "name": "DeepEval Turn Contextual Precision",
@@ -445,7 +456,8 @@
         "includeReason": true,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-turnContextualRecall",
       "name": "DeepEval Turn Contextual Recall",
@@ -460,7 +472,8 @@
         "includeReason": true,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-turnContextualRelevancy",
       "name": "DeepEval Turn Contextual Relevancy",
@@ -635,6 +648,66 @@
             "node": "DeepEval Conversational G-Eval",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "DeepEval Conversational DAG",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "DeepEval Turn Relevancy",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "DeepEval Role Adherence",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "DeepEval Knowledge Retention",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "DeepEval Conversation Completeness",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "DeepEval Goal Accuracy",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "DeepEval Tool Use",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "DeepEval Topic Adherence",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "DeepEval Turn Faithfulness",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "DeepEval Turn Contextual Precision",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "DeepEval Turn Contextual Recall",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "DeepEval Turn Contextual Relevancy",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -642,11 +715,6 @@
     "DeepEval Conversational G-Eval": {
       "main": [
         [
-          {
-            "node": "DeepEval Conversational DAG",
-            "type": "main",
-            "index": 0
-          },
           {
             "node": "Collect Metric Results",
             "type": "main",
@@ -659,11 +727,6 @@
       "main": [
         [
           {
-            "node": "DeepEval Turn Relevancy",
-            "type": "main",
-            "index": 0
-          },
-          {
             "node": "Collect Metric Results",
             "type": "main",
             "index": 1
@@ -674,11 +737,6 @@
     "DeepEval Turn Relevancy": {
       "main": [
         [
-          {
-            "node": "DeepEval Role Adherence",
-            "type": "main",
-            "index": 0
-          },
           {
             "node": "Collect Metric Results",
             "type": "main",
@@ -691,11 +749,6 @@
       "main": [
         [
           {
-            "node": "DeepEval Knowledge Retention",
-            "type": "main",
-            "index": 0
-          },
-          {
             "node": "Collect Metric Results",
             "type": "main",
             "index": 3
@@ -706,11 +759,6 @@
     "DeepEval Knowledge Retention": {
       "main": [
         [
-          {
-            "node": "DeepEval Conversation Completeness",
-            "type": "main",
-            "index": 0
-          },
           {
             "node": "Collect Metric Results",
             "type": "main",
@@ -723,11 +771,6 @@
       "main": [
         [
           {
-            "node": "DeepEval Goal Accuracy",
-            "type": "main",
-            "index": 0
-          },
-          {
             "node": "Collect Metric Results",
             "type": "main",
             "index": 5
@@ -738,11 +781,6 @@
     "DeepEval Goal Accuracy": {
       "main": [
         [
-          {
-            "node": "DeepEval Tool Use",
-            "type": "main",
-            "index": 0
-          },
           {
             "node": "Collect Metric Results",
             "type": "main",
@@ -755,11 +793,6 @@
       "main": [
         [
           {
-            "node": "DeepEval Topic Adherence",
-            "type": "main",
-            "index": 0
-          },
-          {
             "node": "Collect Metric Results",
             "type": "main",
             "index": 7
@@ -770,11 +803,6 @@
     "DeepEval Topic Adherence": {
       "main": [
         [
-          {
-            "node": "DeepEval Turn Faithfulness",
-            "type": "main",
-            "index": 0
-          },
           {
             "node": "Collect Metric Results",
             "type": "main",
@@ -787,11 +815,6 @@
       "main": [
         [
           {
-            "node": "DeepEval Turn Contextual Precision",
-            "type": "main",
-            "index": 0
-          },
-          {
             "node": "Collect Metric Results",
             "type": "main",
             "index": 9
@@ -803,11 +826,6 @@
       "main": [
         [
           {
-            "node": "DeepEval Turn Contextual Recall",
-            "type": "main",
-            "index": 0
-          },
-          {
             "node": "Collect Metric Results",
             "type": "main",
             "index": 10
@@ -818,11 +836,6 @@
     "DeepEval Turn Contextual Recall": {
       "main": [
         [
-          {
-            "node": "DeepEval Turn Contextual Relevancy",
-            "type": "main",
-            "index": 0
-          },
           {
             "node": "Collect Metric Results",
             "type": "main",

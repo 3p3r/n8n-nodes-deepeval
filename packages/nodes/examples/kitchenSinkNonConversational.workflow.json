@@ -265,7 +265,8 @@
         "threshold": 0.5,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-gEval",
       "name": "DeepEval G-Eval",
@@ -281,7 +282,8 @@
         "includeReason": true,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-dag",
       "name": "DeepEval DAG",
@@ -296,7 +298,8 @@
         "includeReason": true,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-taskCompletion",
       "name": "DeepEval Task Completion",
@@ -310,7 +313,8 @@
         "includeReason": true,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-stepEfficiency",
       "name": "DeepEval Step Efficiency",
@@ -324,7 +328,8 @@
         "includeReason": true,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-argumentCorrectness",
       "name": "DeepEval Argument Correctness",
@@ -342,7 +347,8 @@
         "includeReason": true,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-toolCorrectness",
       "name": "DeepEval Tool Correctness",
@@ -356,7 +362,8 @@
         "includeReason": true,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-planAdherence",
       "name": "DeepEval Plan Adherence",
@@ -370,7 +377,8 @@
         "includeReason": true,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-planQuality",
       "name": "DeepEval Plan Quality",
@@ -384,7 +392,8 @@
         "includeReason": true,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-bias",
       "name": "DeepEval Bias",
@@ -398,7 +407,8 @@
         "includeReason": true,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-toxicity",
       "name": "DeepEval Toxicity",
@@ -413,7 +423,8 @@
         "includeReason": true,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-nonAdvice",
       "name": "DeepEval Non-Advice",
@@ -428,7 +439,8 @@
         "includeReason": true,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-misuse",
       "name": "DeepEval Misuse",
@@ -442,7 +454,8 @@
         "includeReason": true,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-piiLeakage",
       "name": "DeepEval PII Leakage",
@@ -457,7 +470,8 @@
         "includeReason": true,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-roleViolation",
       "name": "DeepEval Role Violation",
@@ -474,7 +488,8 @@
         "includeReason": true,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-summarization",
       "name": "DeepEval Summarization",
@@ -489,7 +504,8 @@
         "includeReason": true,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-promptAlignment",
       "name": "DeepEval Prompt Alignment",
@@ -503,7 +519,8 @@
         "includeReason": true,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-hallucination",
       "name": "DeepEval Hallucination",
@@ -517,7 +534,8 @@
         "includeReason": true,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-citationFaithfulness",
       "name": "DeepEval Citation Faithfulness",
@@ -536,7 +554,8 @@
         "includeReason": true,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-agentLoopDetection",
       "name": "DeepEval Agent Loop Detection",
@@ -551,7 +570,8 @@
         "threshold": 1,
         "includeReason": true,
         "strictMode": false,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "metric-toolPermission",
       "name": "DeepEval Tool Permission",

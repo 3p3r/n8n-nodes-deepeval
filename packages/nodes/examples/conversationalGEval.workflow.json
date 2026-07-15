@@ -58,7 +58,8 @@
         "threshold": 0.5,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "deepeval-metric",
       "name": "DeepEval Conversational G-Eval",

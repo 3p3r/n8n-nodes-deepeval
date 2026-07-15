@@ -221,6 +221,50 @@ def _build_test_case(request):
     return test_case
 
 
+def reset_deepeval_session():
+  import sys
+
+  for name in list(globals().keys()):
+    if name.startswith("__deepeval_"):
+      globals().pop(name, None)
+
+  try:
+    from deepeval.tracing import tracing
+
+    manager = getattr(tracing, "trace_manager", None)
+    if manager is not None:
+      for attr in ("active_traces", "active_spans", "traces"):
+        value = getattr(manager, attr, None)
+        if hasattr(value, "clear"):
+          value.clear()
+      for attr in ("eval_session", "current_trace", "current_span"):
+        if hasattr(manager, attr):
+          try:
+            setattr(manager, attr, None)
+          except Exception:
+            pass
+  except Exception:
+    pass
+
+  for module_name in ("deepeval.tracing.tracing", "deepeval.tracing.context"):
+    module = sys.modules.get(module_name)
+    if module is None:
+      continue
+    for attr in (
+      "current_span_context",
+      "current_trace_context",
+      "CURRENT_GOLDEN",
+      "current_llm_context",
+      "current_agent_context",
+    ):
+      context_var = getattr(module, attr, None)
+      if context_var is not None and hasattr(context_var, "set"):
+        try:
+          context_var.set(None)
+        except Exception:
+          pass
+
+
 async def run_deepeval_request(request_json):
     request = json.loads(request_json)
     module = importlib.import_module(request["pythonImport"])

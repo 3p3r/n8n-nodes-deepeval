@@ -55,7 +55,8 @@
         "threshold": 1,
         "includeReason": true,
         "strictMode": false,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "deepeval-metric",
       "name": "DeepEval Tool Permission",

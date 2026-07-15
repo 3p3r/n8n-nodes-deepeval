@@ -694,43 +694,20 @@ function kitchenSinkWorkflow(conversational: boolean): Record<string, unknown> {
     },
   };
 
-  if (conversational) {
-    const firstMetric = metrics[0];
-    if (!firstMetric) {
-      throw new Error('Conversational kitchen sink requires at least one memory-backed metric');
-    }
-    connections['Prepare Metric Input'] = {
-      main: [[{ node: firstMetric.displayName, type: 'main', index: 0 }]],
-    };
+  connections['Prepare Metric Input'] = {
+    main: [
+      metrics.map((definition) => ({
+        node: definition.displayName,
+        type: 'main',
+        index: 0,
+      })),
+    ],
+  };
 
-    for (const [index, definition] of metrics.entries()) {
-      const next = metrics[index + 1];
-      const targets: Array<{ node: string; type: string; index: number }> = [
-        { node: 'Collect Metric Results', type: 'main', index },
-      ];
-      if (next) {
-        targets.unshift({ node: next.displayName, type: 'main', index: 0 });
-      }
-      connections[definition.displayName] = {
-        main: [targets],
-      };
-    }
-  } else {
-    connections['Prepare Metric Input'] = {
-      main: [
-        metrics.map((definition) => ({
-          node: definition.displayName,
-          type: 'main',
-          index: 0,
-        })),
-      ],
+  for (const [index, definition] of metrics.entries()) {
+    connections[definition.displayName] = {
+      main: [[{ node: 'Collect Metric Results', type: 'main', index }]],
     };
-
-    for (const [index, definition] of metrics.entries()) {
-      connections[definition.displayName] = {
-        main: [[{ node: 'Collect Metric Results', type: 'main', index }]],
-      };
-    }
   }
 
   connections['Collect Metric Results'] = {

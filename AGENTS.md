@@ -44,9 +44,10 @@ Most nodes, example workflows, and E2E test stubs are **generated**. Edit metric
 
 DeepEval runs inline through a vendored [Pyodide](https://github.com/pyodide/pyodide) runtime:
 
-- One module-scoped initialization promise per Node process; evaluations reuse the warmed VM and are serialized through one queue (Python VM is not re-entrant).
-- n8n queue workers are separate processes — each worker gets its own warmed runtime.
-- Plan worker memory and throughput around Pyodide init cost and single-queue serialization.
+- A warmed **Pyodide pool** per Node process (default size 4 via `DEEPEVAL_PYODIDE_POOL_SIZE`, clamped 1–16). Each slot is an independent WASM interpreter; metric evals acquire a free slot and release it after mandatory session reset.
+- Optional per-metric **Clean Session** recreates the borrowed slot’s VM after evaluation for stronger isolation.
+- n8n queue workers are separate processes — each worker gets its own pool.
+- Plan worker memory and throughput around pool init cost and ~poolSize × Pyodide RAM per worker.
 
 Shared E2E boot logic lives in `e2e/n8n-session.ts` (`startN8nSession`). Workflow placeholder replacement and node-type remapping live in `e2e/workflow-prep.ts` (`prepareWorkflow`). The Vitest harness in `e2e/harness.ts` imports both.
 

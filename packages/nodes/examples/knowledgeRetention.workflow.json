@@ -54,7 +54,8 @@
         "includeReason": true,
         "strictMode": false,
         "asyncMode": true,
-        "verboseMode": false
+        "verboseMode": false,
+        "cleanSession": false
       },
       "id": "deepeval-metric",
       "name": "DeepEval Knowledge Retention",

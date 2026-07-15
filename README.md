@@ -82,9 +82,23 @@ Repository development, testing, and contributor workflows are documented in [AG
 ## Architecture
 
 DeepEval executes inline through an embedded Python runtime bundled with the package.
-Evaluations run in-process with n8n; plan worker memory and throughput around
-initialization cost and serialized execution. See [AGENTS.md](AGENTS.md) for implementation
-details (Pyodide, vendoring, E2E).
+Evaluations run in-process with n8n via a warmed **Pyodide pool** (default size 4, set
+`DEEPEVAL_PYODIDE_POOL_SIZE`). Each metric evaluation borrows a pool slot, runs in an
+isolated WASM interpreter, and returns the slot after cleanup. Plan worker memory and
+throughput around pool init cost and per-slot RAM. See [AGENTS.md](AGENTS.md) for
+implementation details (Pyodide, vendoring, E2E).
+
+### Pyodide isolation
+
+After every evaluation, the runtime clears judge globals and resets DeepEval trace/context
+state on the borrowed slot before returning it to the pool. That mandatory cleanup prevents
+one metric run from poisoning the next borrower when multiple metrics execute in parallel.
+
+**Clean Session** is an optional per-metric node setting (default **off**). When enabled, the
+runtime discards that slot's Pyodide VM after the evaluation and warms a fresh interpreter
+before the slot re-enters the pool. Use it when you want maximum isolation at the cost of
+slower runs on that node; leave it off for normal throughput. Clean Session is a runtime
+option — it is not passed to DeepEval's Python metric constructor.
 
 ### Required N8N Nodes
 
@@ -136,10 +150,9 @@ Relevancy.
 Same Trigger → enrich → Agent → Aggregate → Persist pipeline as the non-conversational
 sink, plus **Simple Memory** shared by AI Agent and every conversational metric (session key
 `={{ $json.evalContext.runId }}` so each Trigger run gets an isolated buffer). Calculator
-remains on AI Agent for Goal Accuracy and Tool Use. Metrics run **sequentially** on the main
-path (each passes the enriched item forward) while **Collect Metric Results** still gathers
-every score for Aggregate — shared Memory cannot safely fan out to all conversational metrics
-in parallel inside n8n.
+remains on AI Agent for Goal Accuracy and Tool Use. Metrics fan out in parallel from
+**Prepare Metric Input** into **Collect Metric Results** (Merge append); the Pyodide pool
+executes up to `DEEPEVAL_PYODIDE_POOL_SIZE` evaluations concurrently.
 
 ![Conversational kitchen sink example workflow](docs/kitchenSinkConversational.example.png)
 
@@ -153,7 +166,7 @@ Wiring follows normal n8n data flow:
 - **Language Model sub-node** — LLM-judge metrics accept an `aiLanguageModel` connection (the same OpenAI, Anthropic, and related sub-nodes used by AI Agent). AI Agent and Chat Trigger are **not** sub-nodes; only the judge model uses that port.
 - **Memory sub-node** — conversational and turn-based metrics **require** `aiMemory` (Simple Memory, Postgres Chat Memory, and related memory sub-nodes). Connect the **same Memory** used by AI Agent; the metric reads chat history and builds DeepEval `turns` internally.
 
-Remaining DeepEval constructor options (`threshold`, `criteria`, allowlists, and so on) appear as **Config** on the node UI. Every metric node emits the same output shape: `score`, `reason`, `success`. Most metrics pass when `score >= threshold`; lower-is-better safety metrics (Bias, Toxicity, Hallucination, Misuse) pass when `score <= threshold` — each metric section documents its direction.
+Remaining DeepEval constructor options (`threshold`, `criteria`, allowlists, and so on) appear as **Config** on the node UI. **Clean Session** (see [Pyodide isolation](#pyodide-isolation)) is also on every metric node. Every metric node emits the same output shape: `score`, `reason`, `success`. Most metrics pass when `score >= threshold`; lower-is-better safety metrics (Bias, Toxicity, Hallucination, Misuse) pass when `score <= threshold` — each metric section documents its direction.
 
 ### n8n → DeepEval field mapping
 

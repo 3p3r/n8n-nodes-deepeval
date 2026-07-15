@@ -38,6 +38,7 @@ export interface DeepEvalRequest {
   testCase: DeepEvalTestCase;
   lowerIsBetter: boolean;
   requiresModel: boolean;
+  cleanSession?: boolean;
 }
 
 export interface DeepEvalResult {
@@ -56,6 +57,8 @@ export type JudgeCallback = (request: JudgeRequest) => Promise<string>;
 
 export interface RuntimeDiagnostics {
   runtimeId: string;
+  poolSize: number;
+  busyCount: number;
   initializationCount: number;
   initializedAt: string | null;
   evaluationCount: number;

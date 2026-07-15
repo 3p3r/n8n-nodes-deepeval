@@ -18,6 +18,7 @@ import {
 import type { MetricDefinition } from './metric-definitions.js';
 
 const TEST_CASE_PARAMETERS = new Set(['chatbotRole', 'expectedOutcome']);
+const RUNTIME_PARAMETERS = new Set(['cleanSession']);
 
 function snakeCase(value: string): string {
   return value.replace(/[A-Z]/g, (character) => `_${character.toLowerCase()}`);
@@ -77,7 +78,7 @@ function metricConfig(
 ): Record<string, unknown> {
   const config: Record<string, unknown> = {};
   for (const property of definition.properties) {
-    if (TEST_CASE_PARAMETERS.has(property.name)) continue;
+    if (TEST_CASE_PARAMETERS.has(property.name) || RUNTIME_PARAMETERS.has(property.name)) continue;
     const value = parseJsonValue(context.getNodeParameter(property.name, itemIndex));
     if (omitEmpty(value)) continue;
     config[snakeCase(property.name)] = value;
@@ -152,17 +153,6 @@ async function buildTestCase(
   return testCase;
 }
 
-let memoryBackedMetricQueue: Promise<void> = Promise.resolve();
-
-function enqueueMemoryBackedMetric<T>(work: () => Promise<T>): Promise<T> {
-  const execution = memoryBackedMetricQueue.then(work);
-  memoryBackedMetricQueue = execution.then(
-    () => undefined,
-    () => undefined,
-  );
-  return execution;
-}
-
 function nodeInputs(definition: MetricDefinition): INodeInputConfiguration[] {
   return [
     { type: NodeConnectionTypes.Main, displayName: 'Input', required: true },
@@ -215,12 +205,13 @@ export function createMetricNode(definition: MetricDefinition): new () => INodeT
       const output: INodeExecutionData[] = [];
 
       for (const [itemIndex, item] of items.entries()) {
-        const runItem = async (): Promise<void> => {
+        try {
           const json = item.json as Record<string, unknown>;
           const testCase = await buildTestCase(this, definition, json, itemIndex);
           const model = definition.requiresModel
             ? await this.getInputConnectionData(NodeConnectionTypes.AiLanguageModel, itemIndex)
             : undefined;
+          const cleanSession = this.getNodeParameter('cleanSession', itemIndex) as boolean;
           const result = await evaluateDeepEval(
             {
               metricId: definition.id,
@@ -230,6 +221,7 @@ export function createMetricNode(definition: MetricDefinition): new () => INodeT
               testCase,
               lowerIsBetter: definition.lowerIsBetter,
               requiresModel: definition.requiresModel,
+              cleanSession,
             },
             model === undefined ? undefined : createJudgeCallback(model),
           );
@@ -245,14 +237,6 @@ export function createMetricNode(definition: MetricDefinition): new () => INodeT
             },
             pairedItem: { item: itemIndex },
           });
-        };
-
-        try {
-          if (definition.requiresMemory) {
-            await enqueueMemoryBackedMetric(runItem);
-          } else {
-            await runItem();
-          }
         } catch (error) {
           if (this.continueOnFail()) {
             output.push({

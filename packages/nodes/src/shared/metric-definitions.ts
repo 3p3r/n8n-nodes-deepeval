@@ -108,6 +108,7 @@ const commonProperties = (
   booleanProperty('Strict Mode', 'strictMode', false),
   ...(options.asyncMode === false ? [] : [booleanProperty('Async Mode', 'asyncMode', true)]),
   booleanProperty('Verbose Mode', 'verboseMode', false),
+  booleanProperty('Clean Session', 'cleanSession', false),
 ];
 
 const metric = (
