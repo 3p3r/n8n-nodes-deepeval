@@ -1,7 +1,8 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { basename, resolve } from 'node:path';
+import { createRequire } from 'node:module';
+import { basename, dirname, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
 const vendorRoot = resolve(root, 'vendor');
@@ -149,7 +150,8 @@ interface PyodidePackage {
 }
 
 async function vendorPyodidePackages(): Promise<void> {
-  const installedPyodide = resolve(root, 'node_modules/pyodide');
+  const runtimeRequire = createRequire(resolve(root, 'packages/runtime/package.json'));
+  const installedPyodide = dirname(runtimeRequire.resolve('pyodide/package.json'));
   await rm(pyodideAssets, { recursive: true, force: true });
   await mkdir(pyodideAssets, { recursive: true });
 
