@@ -243,6 +243,10 @@ export async function startN8nSession(): Promise<N8nSession> {
       { name: 'overallScore', type: 'number' },
       { name: 'overallSuccess', type: 'boolean' },
       { name: 'metrics', type: 'string' },
+      { name: 'caseId', type: 'string' },
+      { name: 'meanScore', type: 'number' },
+      { name: 'overallConsistency', type: 'number' },
+      { name: 'stats', type: 'string' },
     ]);
     await api(`/rest/projects/${personalProject.id}/data-tables/${sourceTable.id}/insert`, {
       method: 'POST',
@@ -268,8 +272,8 @@ export async function startN8nSession(): Promise<N8nSession> {
     const deepevalNodes = nodeDescriptions.filter((node) =>
       node.displayName.startsWith('DeepEval'),
     );
-    if (deepevalNodes.length !== 35) {
-      throw new Error(`Expected 35 DeepEval nodes in n8n, found ${deepevalNodes.length}`);
+    if (deepevalNodes.length !== 36) {
+      throw new Error(`Expected 36 DeepEval nodes in n8n, found ${deepevalNodes.length}`);
     }
 
     const nodeTypes = Object.fromEntries(

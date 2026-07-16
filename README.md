@@ -1,7 +1,7 @@
 # n8n-nodes-deepeval
 
-n8n community nodes powered by DeepEval: 33 metric nodes, DeepEval Trigger, and DeepEval
-Aggregate.
+n8n community nodes powered by DeepEval: 33 metric nodes, DeepEval Trigger, DeepEval
+Aggregate, and DeepEval Consistency.
 
 - [n8n-nodes-deepeval](#n8n-nodes-deepeval)
   - [Synopsis](#synopsis)
@@ -59,11 +59,12 @@ Aggregate.
     - [DeepEval Aggregate](#deepeval-aggregate)
       - [Sinks](#sinks)
       - [Typical wiring](#typical-wiring)
+    - [DeepEval Consistency](#deepeval-consistency)
 
 ## Synopsis
 
 This package integrates [DeepEval](https://github.com/confident-ai/deepeval) into n8n 2.x.
-It requires Node.js 20 or newer. All 35 nodes are listed under n8n's `AI, LLM & Voice`
+It requires Node.js 20 or newer. All 36 nodes are listed under n8n's `AI, LLM & Voice`
 category and are searchable with the `DeepEval Benchmarking` alias.
 
 The current package intentionally contains only the n8n nodes. The dashboard, dashboard
@@ -85,7 +86,9 @@ DeepEval executes inline through an embedded Python runtime bundled with the pac
 Evaluations run in-process with n8n via a warmed **Pyodide pool** (default size 4, set
 `DEEPEVAL_PYODIDE_POOL_SIZE`). Each metric evaluation borrows a pool slot, runs in an
 isolated WASM interpreter, and returns the slot after cleanup. Plan worker memory and
-throughput around pool init cost and per-slot RAM. See [AGENTS.md](AGENTS.md) for
+throughput around pool init cost and per-slot RAM. **Multi-run consistency** (`runsPerRow`
+> 1 on DeepEval Trigger) multiplies metric evaluations by that factor — size
+`DEEPEVAL_PYODIDE_POOL_SIZE` and worker memory accordingly. See [AGENTS.md](AGENTS.md) for
 implementation details (Pyodide, vendoring, E2E).
 
 ### Pyodide isolation
@@ -208,6 +211,12 @@ instead of bypassing that access control.
 - `limitRows` — whether to cap how many rows are processed
 - `maxRows` — maximum rows when `limitRows` is enabled
 - `filters` — optional column=value filters on the dataset
+- `runsPerRow` — emit this many runs per source row for consistency scoring (default `1`)
+
+Each emitted item includes `evalContext.workflowHash` (SHA-256 of the canonical workflow
+graph), `evalContext.caseId` (`${workflowHash}:${row.id}`), `evalContext.runIndex`, and
+`evalContext.runId` (`${caseId}:${runIndex}`). Workflow edits change `workflowHash`; canvas
+layout changes do not.
 
 ![DeepEval Trigger example workflow](docs/deepEvalTrigger.example.png)
 
@@ -834,3 +843,26 @@ AI Agent → parallel metrics → DeepEval Aggregate → Data Table (insert)`.
 **Live chat eval** (conversational metrics — Memory required):
 
 Connect the **same Memory** sub-node to AI Agent and to each conversational / turn-based metric. Enable **Return Intermediate Steps** on AI Agent when using Goal Accuracy, Tool Use, or other metrics that enrich turns from `intermediateSteps`.
+
+### DeepEval Consistency
+
+Cross-run aggregation for multi-run benchmarks. Consumes **DeepEval Aggregate** outputs,
+groups them by `evalContext.caseId`, and emits per-case score variance, coefficient of
+variation, and optional label entropy or agreement. The importable example wires
+`Data Table (Get rows) → DeepEval Trigger (runsPerRow: 3) → enrich → AI Agent → G-Eval →
+DeepEval Aggregate → DeepEval Consistency → Data Table (Insert)`.
+
+**Config**
+
+- `groupByField` — `evalContext` field used to group runs (default `caseId`)
+- `labelField` — optional item path for categorical labels (required for `entropy` / `agreement` basis)
+- `consistencyBasis` — `cv` (default), `entropy`, or `agreement`
+- `dataTableId` — sink table identity included in the output
+- `writeMode` — intended downstream persistence mode (`append` or `upsert`)
+- output column names for case ID, mean score, consistency score, and serialized `stats`
+
+![DeepEval Consistency example workflow](docs/deepEvalConsistency.example.png)
+
+**Multi-run wiring:** set `runsPerRow` on DeepEval Trigger, run metrics and Aggregate as
+usual (Aggregate emits one item per `evalContext.runId`), then fan in Aggregate outputs to
+DeepEval Consistency for one row per case.

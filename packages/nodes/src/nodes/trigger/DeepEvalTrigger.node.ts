@@ -1,11 +1,12 @@
-import { randomUUID } from 'node:crypto';
 import {
   type IExecuteFunctions,
   type INodeExecutionData,
   type INodeType,
   type INodeTypeDescription,
   NodeConnectionTypes,
+  NodeOperationError,
 } from 'n8n-workflow';
+import { getExecutingWorkflowGraph, hashCanonicalWorkflow } from '../../shared/workflowCaseId.js';
 
 function parseObject(value: unknown, label: string): Record<string, unknown> {
   const parsed = typeof value === 'string' ? JSON.parse(value) : value;
@@ -61,6 +62,14 @@ export class DeepEvalTrigger implements INodeType {
         description: 'Optional equality filters keyed by Data Table column name',
       },
       {
+        displayName: 'Runs Per Row',
+        name: 'runsPerRow',
+        type: 'number',
+        default: 1,
+        typeOptions: { minValue: 1 },
+        description: 'Emit this many runs per source row for consistency scoring',
+      },
+      {
         displayName: 'Limit Rows',
         name: 'limitRows',
         type: 'boolean',
@@ -82,8 +91,11 @@ export class DeepEvalTrigger implements INodeType {
     const runName = this.getNodeParameter('runName', 0) as string;
     const columnMapping = parseObject(this.getNodeParameter('columnMapping', 0), 'Column Mapping');
     const filters = parseObject(this.getNodeParameter('filters', 0), 'Filters');
+    const runsPerRow = this.getNodeParameter('runsPerRow', 0) as number;
     const limitRows = this.getNodeParameter('limitRows', 0) as boolean;
     const maxRows = this.getNodeParameter('maxRows', 0, 100) as number;
+
+    const workflowHash = hashCanonicalWorkflow(getExecutingWorkflowGraph(this));
 
     const filterEntries = Object.entries(filters);
     const rows = this.getInputData()
@@ -92,29 +104,40 @@ export class DeepEvalTrigger implements INodeType {
       )
       .slice(0, limitRows ? maxRows : undefined);
 
-    const runId = randomUUID();
-    const items = rows.map((item, itemIndex) => {
+    const items: INodeExecutionData[] = [];
+    for (const [itemIndex, item] of rows.entries()) {
       const row = item.json;
+      if (row.id === undefined || row.id === null) {
+        throw new NodeOperationError(this.getNode(), 'Every source row must include an id');
+      }
+      const rowId = String(row.id);
+      const caseId = `${workflowHash}:${rowId}`;
       const mapped = Object.fromEntries(
         Object.entries(columnMapping).map(([deepEvalField, columnName]) => [
           deepEvalField,
           row[String(columnName)],
         ]),
       );
-      return {
-        json: {
-          ...mapped,
-          evalContext: {
-            runId,
-            runName,
-            isEvalRun: true,
-            rowId: row.id ?? itemIndex,
-            sourceTableId: tableId,
+
+      for (let runIndex = 0; runIndex < runsPerRow; runIndex++) {
+        items.push({
+          json: {
+            ...mapped,
+            evalContext: {
+              workflowHash,
+              caseId,
+              runIndex,
+              runId: `${caseId}:${runIndex}`,
+              runName,
+              isEvalRun: true,
+              rowId,
+              sourceTableId: tableId,
+            },
           },
-        },
-        pairedItem: { item: itemIndex },
-      } satisfies INodeExecutionData;
-    });
+          pairedItem: { item: itemIndex },
+        });
+      }
+    }
 
     return [items];
   }

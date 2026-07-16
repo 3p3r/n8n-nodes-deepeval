@@ -65,7 +65,7 @@ CI (`.github/workflows/ci.yml`): Ubuntu, Node 24, npm 11.13.0, Python 3.12 + set
 
 ## README screenshots (`docs/`)
 
-The README embeds **37** example-workflow screenshots — **35** under **Available Nodes** (one per node) plus **2** kitchen-sink workflows before that section. Filenames are `docs/{id}.example.png` where `{id}` matches `packages/nodes/examples/{id}.workflow.json`.
+The README embeds **38** example-workflow screenshots — **36** under **Available Nodes** (one per node) plus **2** kitchen-sink workflows before that section. Filenames are `docs/{id}.example.png` where `{id}` matches `packages/nodes/examples/{id}.workflow.json`.
 
 ### When to update
 
@@ -92,13 +92,13 @@ Screenshot capture is intentionally **not** committed as repo scripts. Re-run ad
 
    Per-node order under Available Nodes:
 
-   `deepEvalTrigger`, `gEval`, `dag`, `conversationalGEval`, `conversationalDAG`, `taskCompletion`, `stepEfficiency`, `argumentCorrectness`, `toolCorrectness`, `planAdherence`, `planQuality`, `turnRelevancy`, `roleAdherence`, `knowledgeRetention`, `conversationCompleteness`, `goalAccuracy`, `toolUse`, `topicAdherence`, `turnFaithfulness`, `turnContextualPrecision`, `turnContextualRecall`, `turnContextualRelevancy`, `bias`, `toxicity`, `nonAdvice`, `misuse`, `piiLeakage`, `roleViolation`, `summarization`, `promptAlignment`, `hallucination`, `citationFaithfulness`, `agentLoopDetection`, `toolPermission`, `deepEvalAggregate`
+   `deepEvalTrigger`, `gEval`, `dag`, `conversationalGEval`, `conversationalDAG`, `taskCompletion`, `stepEfficiency`, `argumentCorrectness`, `toolCorrectness`, `planAdherence`, `planQuality`, `turnRelevancy`, `roleAdherence`, `knowledgeRetention`, `conversationCompleteness`, `goalAccuracy`, `toolUse`, `topicAdherence`, `turnFaithfulness`, `turnContextualPrecision`, `turnContextualRecall`, `turnContextualRelevancy`, `bias`, `toxicity`, `nonAdvice`, `misuse`, `piiLeakage`, `roleViolation`, `summarization`, `promptAlignment`, `hallucination`, `citationFaithfulness`, `agentLoopDetection`, `toolPermission`, `deepEvalAggregate`, `deepEvalConsistency`
 
    Typical wiring under Aggregate has prose only (no screenshots).
 
 6. **Tear down** — SIGTERM llamafile and n8n; delete temp user folder.
 
-Verify: `docs/` contains exactly 37 `*.example.png` files; README has no ` ```text ` blocks under Available Nodes.
+Verify: `docs/` contains exactly 38 `*.example.png` files; README has no ` ```text ` blocks under Available Nodes.
 
 ## Conventions for agents
 

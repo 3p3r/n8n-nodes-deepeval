@@ -741,6 +741,279 @@ function kitchenSinkWorkflow(conversational: boolean): Record<string, unknown> {
   };
 }
 
+function consistencyWorkflow(): Record<string, unknown> {
+  const gEval = metricDefinitions.find((definition) => definition.id === 'gEval');
+  if (!gEval) {
+    throw new Error('gEval metric definition is required for the consistency workflow');
+  }
+
+  const nodes: WorkflowNode[] = [
+    {
+      parameters: {},
+      id: 'manual-trigger',
+      name: 'When clicking Execute Workflow',
+      type: 'n8n-nodes-base.manualTrigger',
+      typeVersion: 1,
+      position: [0, 0],
+    },
+    {
+      parameters: {
+        resource: 'row',
+        operation: 'get',
+        dataTableId: {
+          __rl: true,
+          mode: 'id',
+          value: 'REPLACE_WITH_SOURCE_DATA_TABLE_ID',
+        },
+        returnAll: true,
+        filters: {},
+        orderBy: false,
+      },
+      id: 'source-table',
+      name: 'Load Source Rows',
+      type: 'n8n-nodes-base.dataTable',
+      typeVersion: 1.1,
+      position: [240, 0],
+    },
+    {
+      parameters: {
+        runName: 'DeepEval Consistency Benchmark',
+        dataTableId: 'REPLACE_WITH_SOURCE_DATA_TABLE_ID',
+        columnMapping: '{"input":"input","expectedOutput":"expectedOutput"}',
+        filters: '{}',
+        runsPerRow: 3,
+        limitRows: true,
+        maxRows: 1,
+      },
+      id: 'deepeval-trigger',
+      name: 'DeepEval Trigger',
+      type: 'n8n-nodes-deepeval.deepEvalTrigger',
+      typeVersion: 1,
+      position: [480, 0],
+    },
+    {
+      parameters: {
+        mode: 'manual',
+        assignments: {
+          assignments: kitchenSinkEnrichAssignments(),
+        },
+        includeOtherFields: true,
+        options: {},
+      },
+      id: 'enrich-evaluation-data',
+      name: 'Enrich Evaluation Data',
+      type: 'n8n-nodes-base.set',
+      typeVersion: 3.4,
+      position: [720, 0],
+    },
+    {
+      parameters: {
+        promptType: 'define',
+        text: '={{ $json.input }}',
+        options: {
+          returnIntermediateSteps: true,
+          systemMessage:
+            'You are an arithmetic assistant. You must use the Calculator tool exactly once before answering.',
+        },
+      },
+      id: 'ai-agent',
+      name: 'AI Agent',
+      type: '@n8n/n8n-nodes-langchain.agent',
+      typeVersion: 3.1,
+      position: [960, 0],
+    },
+    {
+      parameters: {
+        mode: 'combine',
+        combineBy: 'combineByPosition',
+        options: {},
+      },
+      id: 'metric-input',
+      name: 'Prepare Metric Input',
+      type: 'n8n-nodes-base.merge',
+      typeVersion: 3.2,
+      position: [1200, 0],
+    },
+    {
+      parameters: exampleParameters(gEval),
+      id: 'deepeval-g-eval',
+      name: gEval.displayName,
+      type: nodeType(gEval),
+      typeVersion: 1,
+      position: [1440, 0],
+    },
+    {
+      parameters: {
+        dataTableId: 'REPLACE_WITH_RESULTS_DATA_TABLE_ID',
+        passRule: 'allPass',
+        writeMode: 'upsert',
+        runIdColumn: 'runId',
+        scoreColumn: 'overallScore',
+        successColumn: 'overallSuccess',
+        metricsColumn: 'metrics',
+      },
+      id: 'deepeval-aggregate',
+      name: 'DeepEval Aggregate',
+      type: 'n8n-nodes-deepeval.deepEvalAggregate',
+      typeVersion: 1,
+      position: [1680, 0],
+    },
+    {
+      parameters: {
+        groupByField: 'caseId',
+        labelField: '',
+        consistencyBasis: 'cv',
+        dataTableId: 'REPLACE_WITH_RESULTS_DATA_TABLE_ID',
+        writeMode: 'upsert',
+        caseIdColumn: 'caseId',
+        meanScoreColumn: 'meanScore',
+        consistencyColumn: 'overallConsistency',
+        statsColumn: 'stats',
+      },
+      id: 'deepeval-consistency',
+      name: 'DeepEval Consistency',
+      type: 'n8n-nodes-deepeval.deepEvalConsistency',
+      typeVersion: 1,
+      position: [1920, 0],
+    },
+    {
+      parameters: {
+        resource: 'row',
+        operation: 'insert',
+        dataTableId: {
+          __rl: true,
+          mode: 'id',
+          value: 'REPLACE_WITH_RESULTS_DATA_TABLE_ID',
+        },
+        columns: {
+          mappingMode: 'defineBelow',
+          value: {
+            caseId: '={{ $json.caseId }}',
+            meanScore: '={{ $json.meanScore }}',
+            overallConsistency: '={{ $json.overallConsistency }}',
+            stats: '={{ JSON.stringify($json.stats) }}',
+          },
+          schema: [
+            {
+              id: 'caseId',
+              displayName: 'caseId',
+              type: 'string',
+              canBeUsedToMatch: true,
+            },
+            {
+              id: 'meanScore',
+              displayName: 'meanScore',
+              type: 'number',
+              canBeUsedToMatch: true,
+            },
+            {
+              id: 'overallConsistency',
+              displayName: 'overallConsistency',
+              type: 'number',
+              canBeUsedToMatch: true,
+            },
+            {
+              id: 'stats',
+              displayName: 'stats',
+              type: 'string',
+              canBeUsedToMatch: true,
+            },
+          ],
+        },
+        options: {},
+      },
+      id: 'persist-results',
+      name: 'Persist Results',
+      type: 'n8n-nodes-base.dataTable',
+      typeVersion: 1.1,
+      position: [2160, 0],
+    },
+    {
+      parameters: {
+        model: { __rl: true, mode: 'id', value: 'REPLACE_WITH_MODEL_ID' },
+        options: {
+          baseURL: 'http://127.0.0.1:8080/v1',
+          timeout: 120_000,
+          maxRetries: 0,
+        },
+      },
+      id: 'judge-model',
+      name: 'OpenAI Chat Model',
+      type: '@n8n/n8n-nodes-langchain.lmChatOpenAi',
+      typeVersion: 1.2,
+      position: [960, 280],
+      credentials: {
+        openAiApi: {
+          id: 'REPLACE_WITH_OPENAI_CREDENTIAL_ID',
+          name: 'Local OpenAI-compatible endpoint',
+        },
+      },
+    },
+    {
+      parameters: {},
+      id: 'calculator',
+      name: 'Calculator',
+      type: '@n8n/n8n-nodes-langchain.toolCalculator',
+      typeVersion: 1,
+      position: [1080, 280],
+    },
+  ];
+
+  return {
+    name: 'DeepEval Consistency Example',
+    nodes,
+    connections: {
+      'When clicking Execute Workflow': {
+        main: [[{ node: 'Load Source Rows', type: 'main', index: 0 }]],
+      },
+      'Load Source Rows': {
+        main: [[{ node: 'DeepEval Trigger', type: 'main', index: 0 }]],
+      },
+      'DeepEval Trigger': {
+        main: [[{ node: 'Enrich Evaluation Data', type: 'main', index: 0 }]],
+      },
+      'Enrich Evaluation Data': {
+        main: [
+          [
+            { node: 'AI Agent', type: 'main', index: 0 },
+            { node: 'Prepare Metric Input', type: 'main', index: 0 },
+          ],
+        ],
+      },
+      'AI Agent': {
+        main: [[{ node: 'Prepare Metric Input', type: 'main', index: 1 }]],
+      },
+      'Prepare Metric Input': {
+        main: [[{ node: gEval.displayName, type: 'main', index: 0 }]],
+      },
+      [gEval.displayName]: {
+        main: [[{ node: 'DeepEval Aggregate', type: 'main', index: 0 }]],
+      },
+      'DeepEval Aggregate': {
+        main: [[{ node: 'DeepEval Consistency', type: 'main', index: 0 }]],
+      },
+      'DeepEval Consistency': {
+        main: [[{ node: 'Persist Results', type: 'main', index: 0 }]],
+      },
+      Calculator: {
+        ai_tool: [[{ node: 'AI Agent', type: 'ai_tool', index: 0 }]],
+      },
+      'OpenAI Chat Model': {
+        ai_languageModel: [
+          [
+            { node: 'AI Agent', type: 'ai_languageModel', index: 0 },
+            { node: gEval.displayName, type: 'ai_languageModel', index: 0 },
+          ],
+        ],
+      },
+    },
+    settings: { executionOrder: 'v1' },
+    active: false,
+    pinData: {},
+    tags: [],
+  };
+}
+
 function aggregateWorkflow(): Record<string, unknown> {
   return {
     name: 'DeepEval Aggregate Example',
@@ -863,6 +1136,7 @@ async function writeGeneratedFiles(): Promise<void> {
   const nodePaths = [
     'dist/nodes/trigger/DeepEvalTrigger.node.js',
     'dist/nodes/aggregate/DeepEvalAggregate.node.js',
+    'dist/nodes/consistency/DeepEvalConsistency.node.js',
   ];
 
   for (const definition of metricDefinitions) {
@@ -896,6 +1170,10 @@ runNodeWorkflow('${definition.id}', '${definition.displayName}');
     `${JSON.stringify(aggregateWorkflow(), null, 2)}\n`,
   );
   await writeFile(
+    resolve(examplesRoot, 'deepEvalConsistency.workflow.json'),
+    `${JSON.stringify(consistencyWorkflow(), null, 2)}\n`,
+  );
+  await writeFile(
     resolve(e2eRoot, 'deepEvalTrigger.e2e.test.ts'),
     `import { runNodeWorkflow } from '../harness.js';
 
@@ -907,6 +1185,13 @@ runNodeWorkflow('deepEvalTrigger', 'DeepEval Trigger');
     `import { runNodeWorkflow } from '../harness.js';
 
 runNodeWorkflow('deepEvalAggregate', 'DeepEval Aggregate');
+`,
+  );
+  await writeFile(
+    resolve(e2eRoot, 'deepEvalConsistency.e2e.test.ts'),
+    `import { runNodeWorkflow } from '../harness.js';
+
+runNodeWorkflow('deepEvalConsistency', 'DeepEval Consistency');
 `,
   );
 

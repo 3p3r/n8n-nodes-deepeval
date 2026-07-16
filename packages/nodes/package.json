@@ -30,6 +30,7 @@
     "nodes": [
       "dist/nodes/trigger/DeepEvalTrigger.node.js",
       "dist/nodes/aggregate/DeepEvalAggregate.node.js",
+      "dist/nodes/consistency/DeepEvalConsistency.node.js",
       "dist/nodes/metrics/DeepEvalGEval/DeepEvalGEval.node.js",
       "dist/nodes/metrics/DeepEvalDAG/DeepEvalDAG.node.js",
       "dist/nodes/metrics/DeepEvalConversationalGEval/DeepEvalConversationalGEval.node.js",
@@ -66,7 +67,8 @@
     ]
   },
   "dependencies": {
+    "@n8n-deepeval/runtime": "file:../runtime",
     "pyodide": "^0.27.7",
-    "@n8n-deepeval/runtime": "file:../runtime"
+    "simple-statistics": "^7.9.3"
   }
 }

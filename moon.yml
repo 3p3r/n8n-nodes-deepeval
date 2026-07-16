@@ -42,6 +42,7 @@ tasks:
       - 'package.json'
       - 'tsconfig.json'
       - 'vitest.config.ts'
+      - 'vitest.unit.config.ts'
       - 'packages/**/*.ts'
       - 'packages/**/*.json'
       - 'tooling/**/*.ts'

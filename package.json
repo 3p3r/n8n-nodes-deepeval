@@ -19,7 +19,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "format": "biome format --write .",
-    "test": "npm run build && vitest run",
+    "test": "npm run build && vitest run --config vitest.unit.config.ts",
     "test:e2e": "vitest run e2e",
     "check": "npm run typecheck && npm run lint && npm test",
     "pack:nodes": "npm pack --workspace n8n-nodes-deepeval"

@@ -98,6 +98,17 @@ async function assertAggregatePersistence(
   expect(result.data.some((row) => row.runId === runId)).toBe(true);
 }
 
+async function assertConsistencyPersistence(
+  context: DeepEvalE2EContext,
+  caseId: string,
+): Promise<void> {
+  const result = await api<{ data: Array<Record<string, unknown>> }>(
+    context,
+    `/rest/projects/${context.projectId}/data-tables/${context.resultsTableId}/rows`,
+  );
+  expect(result.data.some((row) => row.caseId === caseId)).toBe(true);
+}
+
 const kitchenSinkExecutionTimeoutMs = 3_600_000;
 
 export function runNodeWorkflow(workflowId: string, displayName: string): void {
@@ -121,7 +132,10 @@ export function runNodeWorkflow(workflowId: string, displayName: string): void {
               method: 'POST',
               body: JSON.stringify({
                 destinationNode: {
-                  nodeName: workflowId === 'deepEvalAggregate' ? 'Persist Results' : displayName,
+                  nodeName:
+                    workflowId === 'deepEvalAggregate' || workflowId === 'deepEvalConsistency'
+                      ? 'Persist Results'
+                      : displayName,
                   mode: 'inclusive',
                 },
               }),
@@ -139,11 +153,25 @@ export function runNodeWorkflow(workflowId: string, displayName: string): void {
             isEvalRun: true,
             sourceTableId: context.sourceTableId,
           });
+          const evalContext = output[0]?.evalContext as Record<string, unknown>;
+          expect(typeof evalContext.workflowHash).toBe('string');
+          expect(typeof evalContext.caseId).toBe('string');
+          expect(typeof evalContext.runIndex).toBe('number');
+          expect(typeof evalContext.runId).toBe('string');
         } else if (workflowId === 'deepEvalAggregate') {
           expect(typeof output[0]?.score).toBe('number');
           expect(typeof output[0]?.success).toBe('boolean');
           expect(Array.isArray(output[0]?.metrics)).toBe(true);
           await assertAggregatePersistence(context, String(output[0]?.runId));
+        } else if (workflowId === 'deepEvalConsistency') {
+          expect(output).toHaveLength(1);
+          expect(output[0]?.runCount).toBe(3);
+          expect(typeof output[0]?.meanScore).toBe('number');
+          expect(typeof output[0]?.overallConsistency).toBe('number');
+          const stats = output[0]?.stats as Record<string, unknown>;
+          expect(Array.isArray(stats?.perMetric)).toBe(true);
+          expect(stats?.perMetric).toHaveLength(1);
+          await assertConsistencyPersistence(context, String(output[0]?.caseId));
         } else {
           expect(output[0]?.metric).toBe(displayName);
           expect(typeof output[0]?.score).toBe('number');
