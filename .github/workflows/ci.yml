@@ -76,7 +76,6 @@ jobs:
         run: npm run ensure-llamafile
 
       - name: Run end-to-end tests against out/
-        if: false # TEMP: skip ~1h E2E while validating nightly release fix
         run: npm run test:e2e:out
 
       - name: Upload publishable package
