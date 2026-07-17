@@ -49,6 +49,23 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Verify publishable package has no runtime dependencies
+        run: |
+          node --input-type=module -e "
+            import { readFileSync } from 'node:fs';
+            const pkg = JSON.parse(readFileSync('out/package.json', 'utf8'));
+            if (pkg.dependencies && Object.keys(pkg.dependencies).length > 0) {
+              throw new Error('out/package.json must not list runtime dependencies');
+            }
+          "
+
+      - name: Verify bundled output does not require pyodide npm package
+        run: |
+          if grep -r 'require("pyodide")' out/dist; then
+            echo 'Bundled output still requires the pyodide npm package'
+            exit 1
+          fi
+
       - name: Cache llamafile
         uses: actions/cache@v4
         with:
@@ -58,5 +75,42 @@ jobs:
       - name: Download and verify llamafile
         run: npm run ensure-llamafile
 
-      - name: Run end-to-end tests
-        run: npm run test:e2e
+      - name: Run end-to-end tests against out/
+        run: npm run test:e2e:out
+
+      - name: Upload publishable package
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: out-package
+          path: out/
+
+  nightly:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download publishable package
+        uses: actions/download-artifact@v4
+        with:
+          name: out-package
+          path: out
+
+      - name: Pack publishable tarball
+        run: |
+          cd out
+          npm pack
+          mv n8n-nodes-deepeval-*.tgz ../n8n-nodes-deepeval.tar.gz
+
+      - name: Publish nightly release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete nightly --yes --cleanup-tag || true
+          gh release create nightly n8n-nodes-deepeval.tar.gz \
+            --title "Nightly" \
+            --notes "Automated main build from ${GITHUB_SHA}" \
+            --latest=false

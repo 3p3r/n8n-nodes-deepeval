@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { loadPyodide, type PyodideInterface } from 'pyodide';
+import type { PyodideInterface } from 'pyodide';
 import { PYTHON_BRIDGE } from './python-bridge.js';
 import type {
   DeepEvalRequest,
@@ -38,6 +39,15 @@ function assetsDirectory(): string {
   return resolve(moduleDirectory(), '..', 'assets');
 }
 
+function loadPyodideFromAssets(assets: string): Promise<PyodideInterface> {
+  const pyodideDir = resolve(assets, 'pyodide');
+  const require = createRequire(resolve(pyodideDir, 'package.json'));
+  const { loadPyodide } = require('./pyodide.js') as {
+    loadPyodide: (config: { indexURL: string }) => Promise<PyodideInterface>;
+  };
+  return loadPyodide({ indexURL: `${pyodideDir}/` });
+}
+
 export function getPyodidePoolSize(): number {
   const raw = Number(process.env.DEEPEVAL_PYODIDE_POOL_SIZE ?? '4');
   if (!Number.isFinite(raw)) return 4;
@@ -68,8 +78,7 @@ pyodide_http.patch_all()
 async function initializeSlot(slotIndex: number, poolSize: number): Promise<PyodideInterface> {
   initializationCount += 1;
   const assets = assetsDirectory();
-  const indexUrl = `${resolve(assets, 'pyodide')}/`;
-  const pyodide = await loadPyodide({ indexURL: indexUrl });
+  const pyodide = await loadPyodideFromAssets(assets);
 
   await pyodide.loadPackage([
     'micropip',

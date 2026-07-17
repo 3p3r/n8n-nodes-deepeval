@@ -11,9 +11,7 @@ export default defineConfig({
       formats: ['es'],
       fileName: 'index',
     },
-    rollupOptions: {
-      external: ['pyodide'],
-    },
+    rollupOptions: {},
     sourcemap: true,
   },
 });

@@ -59,7 +59,7 @@ export default defineConfig({
     rollupOptions: {
       preserveEntrySignatures: 'strict',
       input: collectNodeEntries(sourceRoot),
-      external: ['n8n-workflow', 'pyodide', /^node:/, /^@langchain\//],
+      external: ['n8n-workflow', /^node:/, /^@langchain\//],
       output: {
         format: 'cjs',
         entryFileNames: '[name].js',

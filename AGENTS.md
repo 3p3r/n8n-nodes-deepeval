@@ -8,7 +8,9 @@ Instructions for AI agents and contributors working in this repository.
 | --- | --- |
 | `tooling/generate.ts` | Source of truth for metric definitions; generates node TS/JSON, example workflows, and E2E tests |
 | `tooling/vendor.ts` | Downloads and patches DeepEval + Pyodide; builds vendored wheels |
+| `tooling/assemble-out.ts` | Assembles the publishable npm package into root `out/` |
 | `tooling/ensure-llamafile.ts` | Downloads pinned llamafile + APE loader for local E2E inference |
+| `out/` | Publishable npm package (gitignored); produced by `npm run build` |
 | `packages/runtime/` | Pyodide runtime that executes DeepEval in-process |
 | `packages/nodes/` | n8n community nodes (built to `packages/nodes/dist`) |
 | `packages/nodes/examples/` | Importable example workflow JSON per node (`{id}.workflow.json`) |
@@ -26,14 +28,17 @@ npm run build
 npm run typecheck
 npm run lint
 npm test          # unit tests
-npm run test:e2e  # real n8n + llamafile (slow; ~tens of minutes in CI)
+npm run test:e2e      # real n8n + llamafile against packages/nodes/dist (--test=src)
+npm run test:e2e:out  # same suite against out/ (--test=out; CI uses this)
+npm run pack:out      # npm pack inside out/
 npm run check     # typecheck + lint + unit tests
 ```
 
 ### Build pipeline
 
 - `npm run generate` — runs `tooling/generate.ts`, then formats generated files under `packages/nodes/examples`, `packages/nodes/src/nodes`, and `e2e/generated`.
-- `npm run build` — `generate` then `moon run runtime:build nodes:build`.
+- `npm run build` — `generate`, then `moon run runtime:build nodes:build`, then `tooling/assemble-out.ts` to produce root `out/`.
+- `out/` is the self-contained publishable package: `dist/`, `examples/`, `docs/`, `package.json` (peerDep `n8n-workflow` only; no runtime `dependencies`), plus `LICENSE` and `README.md`. Pyodide loads from bundled `dist/assets/pyodide/` (not the npm `pyodide` package).
 - First Moon build triggers `root:vendor` automatically: downloads pinned **DeepEval 4.0.7** and **Pyodide 0.27.7**, applies compatibility patches, verifies checksums, and builds local wheels. Generated assets live under gitignored paths (`vendor/`, `packages/runtime/assets/`, etc.) but are included in the published npm package. Run `npm run vendor` only when explicitly refreshing vendored assets.
 
 ### Code generation
@@ -53,15 +58,15 @@ Shared E2E boot logic lives in `e2e/n8n-session.ts` (`startN8nSession`). Workflo
 
 ### E2E testing
 
-E2E spins a **real** npm-installed n8n process with `N8N_CUSTOM_EXTENSIONS` pointing at `packages/nodes/dist`:
+E2E spins a **real** npm-installed n8n process with `N8N_CUSTOM_EXTENSIONS` pointing at either `packages/nodes/dist` (`--test=src`, default) or `out/` (`--test=out`):
 
 1. `npm run ensure-llamafile` — downloads `Ministral-3-3B-Instruct-2512-Q4_K_M.llamafile` and the Cosmopolitan APE loader into gitignored `.llamafile/`.
-2. `e2e/global-setup.ts` starts llamafile (OpenAI-compatible API) and n8n, sets up owner account, OpenAI credential, Data Tables, and loads live `/types/nodes.json` for DeepEval node type remapping.
+2. `e2e/global-setup.ts` starts llamafile (OpenAI-compatible API) and n8n, sets up owner account, OpenAI credential, Data Tables, and loads live `/types/nodes.json` for DeepEval node type remapping. Target selection lives in `e2e/test-target.ts`.
 3. Each test in `e2e/generated/` imports the matching `packages/nodes/examples/{id}.workflow.json`, prepares it, POSTs to `/rest/workflows`, runs the workflow, and asserts output.
 
 Tests use only the local llamafile model with `sk-no-key-required`. There is no remote inference fallback.
 
-CI (`.github/workflows/ci.yml`): Ubuntu, Node 24, npm 11.13.0, Python 3.12 + setuptools for node-gyp, then `npm ci`, `npm run ensure-llamafile`, `npm run check`, `npm run test:e2e`.
+CI (`.github/workflows/ci.yml`): Ubuntu, Node 24, npm 11.13.0, Python 3.12 + setuptools for node-gyp, then `npm ci`, `npm run ensure-llamafile`, `npm run check`, `npm run test:e2e:out`. On **main** pushes, CI also packs `out/` and force-updates the **`nightly`** GitHub Release with `n8n-nodes-deepeval.tar.gz`.
 
 ## README screenshots (`docs/`)
 
@@ -114,5 +119,5 @@ Verify: `docs/` contains exactly 38 `*.example.png` files; README has no ` ```te
 
   Fix any issues they report. Do not leave formatting or lint violations for a follow-up.
 - Use [Conventional Commits](https://www.conventionalcommits.org/) for commit messages (e.g. `feat:`, `fix:`, `docs:`, `ci:`, `refactor:`, `chore:`). Keep the subject line imperative and under ~72 characters; add a body when the why is not obvious.
-- Do not commit `.capture-session.json`, `.llamafile/`, or vendored build artifacts.
+- Do not commit `.capture-session.json`, `.llamafile/`, `out/`, or vendored build artifacts.
 - Commit `docs/*.example.png` when screenshots are refreshed.
