@@ -23,7 +23,8 @@
     "test:e2e": "vitest run e2e",
     "test:e2e:out": "vitest run e2e -- --test=out",
     "check": "npm run typecheck && npm run lint && npm test",
-    "pack:out": "npm run build && cd out && npm pack"
+    "pack:out": "npm run build && cd out && npm pack",
+    "dev:n8n": "npm run ensure-llamafile && vite-node tooling/launch-n8n.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.3",

@@ -4,7 +4,11 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
-import { customExtensionsDirectory } from './test-target.js';
+import {
+  customExtensionsDirectory,
+  type E2ETestTarget,
+  parseE2ETestTarget,
+} from './test-target.js';
 
 export interface DeepEvalE2EContext {
   baseUrl: string;
@@ -23,6 +27,10 @@ export interface N8nSession {
   logPath: string;
   userFolder: string;
   teardown: () => Promise<void>;
+}
+
+export interface StartN8nSessionOptions {
+  testTarget?: E2ETestTarget;
 }
 
 interface ApiResponse<T> {
@@ -125,7 +133,8 @@ async function stopProcess(child: ChildProcess): Promise<void> {
   });
 }
 
-export async function startN8nSession(): Promise<N8nSession> {
+export async function startN8nSession(options: StartN8nSessionOptions = {}): Promise<N8nSession> {
+  const extensionsDir = customExtensionsDirectory(options.testTarget ?? parseE2ETestTarget());
   const userFolder = await mkdtemp(resolve(tmpdir(), 'n8n-deepeval-e2e-'));
   const logPath = resolve(userFolder, 'n8n.log');
   const logStream = createWriteStream(logPath, { flags: 'a' });
@@ -179,7 +188,7 @@ export async function startN8nSession(): Promise<N8nSession> {
         N8N_TEMPLATES_ENABLED: 'false',
         N8N_RUNNERS_ENABLED: 'false',
         N8N_COMMUNITY_PACKAGES_ENABLED: 'true',
-        N8N_CUSTOM_EXTENSIONS: customExtensionsDirectory(),
+        N8N_CUSTOM_EXTENSIONS: extensionsDir,
         N8N_ENCRYPTION_KEY: 'deepeval-e2e-encryption-key',
         N8N_LOG_LEVEL: 'info',
       },
