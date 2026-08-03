@@ -8,8 +8,8 @@ const directory = resolve(root, '.llamafile');
 const filename = 'Ministral-3-3B-Instruct-2512-Q4_K_M.llamafile';
 const destination = resolve(directory, filename);
 const url =
-  'https://huggingface.co/mozilla-ai/llamafile_0.10/resolve/main/Ministral-3-3B-Instruct-2512-Q4_K_M.llamafile';
-const expectedSha256 = 'c46334e2f284e9eec3bb5bf9ad59e552aaf2ad3ee789de50f3e883fa657efe3c';
+  'https://huggingface.co/mozilla-ai/llamafile_0.10/resolve/132715bf3442e0e5ef8bd532a9ea9c5eb10030bd/Ministral-3-3B-Instruct-2512-Q4_K_M.llamafile';
+const expectedSha256 = '2206660b4ce73e04b87fedfb5ebd1591b7da02c01c55998340f3540817d58be3';
 const apeLoaderPath = resolve(directory, 'ape');
 const apeMachine = process.arch === 'arm64' ? 'aarch64' : 'x86_64';
 const apeLoaderUrl = `https://cosmo.zip/pub/cosmos/bin/ape-${apeMachine}.elf`;
