@@ -1,0 +1,36 @@
+{
+  "name": "@n8n-deepeval/dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "DeepEval ABC dashboard hooks for n8n",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "npm run build:backend && npm run build:bridge && npm run build:app",
+    "build:backend": "tsup --config tsup.backend.config.ts",
+    "build:bridge": "tsup --config tsup.bridge.config.ts",
+    "build:app": "vite build",
+    "dev:app": "vite",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "debug": "^4.4.3",
+    "pdf-lib": "^1.17.1",
+    "rc": "^1.2.8",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
+  },
+  "devDependencies": {
+    "@types/archiver": "^6.0.3",
+    "@types/debug": "^4.1.13",
+    "@types/express": "^5.0.6",
+    "@types/rc": "^1.2.4",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.2",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.0"
+  }
+}

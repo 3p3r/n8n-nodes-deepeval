@@ -1,0 +1,22 @@
+language: 'typescript'
+layer: 'library'
+
+tasks:
+  build:
+    command: 'npm run build'
+    inputs:
+      - 'src/**/*'
+      - 'tsup.backend.config.ts'
+      - 'tsup.bridge.config.ts'
+      - 'vite.config.ts'
+      - 'package.json'
+      - 'tsconfig.json'
+    outputs:
+      - 'dist'
+  typecheck:
+    command: 'npm run typecheck'
+    inputs:
+      - 'src/**/*'
+      - 'test/**/*'
+      - 'package.json'
+      - 'tsconfig.json'

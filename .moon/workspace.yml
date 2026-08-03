@@ -2,6 +2,7 @@ projects:
   root: '.'
   runtime: 'packages/runtime'
   nodes: 'packages/nodes'
+  dashboard: 'packages/dashboard'
 
 vcs:
   client: 'git'

@@ -24,6 +24,20 @@ async function assembleOut(): Promise<void> {
     unknown
   >;
 
+  const dashboardDist = resolve(root, 'packages/dashboard/dist');
+  const dashboardBackend = resolve(dashboardDist, 'backend/hooks.cjs');
+  const dashboardBridge = resolve(dashboardDist, 'bridge/index.js');
+  const dashboardApp = resolve(dashboardDist, 'app/index.html');
+  for (const required of [dashboardBackend, dashboardBridge, dashboardApp]) {
+    try {
+      await readFile(required);
+    } catch {
+      throw new Error(
+        `Dashboard dist missing: ${required}. Build @n8n-deepeval/dashboard before assemble-out.`,
+      );
+    }
+  }
+
   await rm(outRoot, { recursive: true, force: true });
   await mkdir(outRoot, { recursive: true });
 
@@ -32,6 +46,7 @@ async function assembleOut(): Promise<void> {
   await cp(resolve(root, 'docs'), resolve(outRoot, 'docs'), { recursive: true });
   await cp(resolve(root, 'LICENSE'), resolve(outRoot, 'LICENSE'));
   await cp(resolve(root, 'README.md'), resolve(outRoot, 'README.md'));
+  await cp(dashboardDist, resolve(outRoot, 'dashboard'), { recursive: true });
 
   const publishPackage: PublishPackageJson = {
     name: String(nodesPackage.name),
@@ -40,7 +55,7 @@ async function assembleOut(): Promise<void> {
     license: String(nodesPackage.license),
     type: String(nodesPackage.type ?? 'commonjs'),
     keywords: nodesPackage.keywords as string[],
-    files: ['dist', 'examples', 'docs'],
+    files: ['dist', 'examples', 'docs', 'dashboard'],
     peerDependencies: nodesPackage.peerDependencies as Record<string, string>,
     n8n: nodesPackage.n8n as Record<string, unknown>,
   };

@@ -2,7 +2,7 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    include: ['e2e/generated/*.e2e.test.ts'],
+    include: ['e2e/generated/*.e2e.test.ts', 'e2e/dashboard.e2e.test.ts'],
     globalSetup: ['e2e/global-setup.ts'],
     isolate: false,
     fileParallelism: false,

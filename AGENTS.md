@@ -8,15 +8,17 @@ Instructions for AI agents and contributors working in this repository.
 | --- | --- |
 | `tooling/generate.ts` | Source of truth for metric definitions; generates node TS/JSON, example workflows, and E2E tests |
 | `tooling/vendor.ts` | Downloads and patches DeepEval + Pyodide; builds vendored wheels |
-| `tooling/assemble-out.ts` | Assembles the publishable npm package into root `out/` |
+| `tooling/assemble-out.ts` | Assembles the publishable npm package into root `out/` (nodes + `dashboard/`) |
 | `tooling/ensure-llamafile.ts` | Downloads pinned llamafile + APE loader for local E2E inference |
+| `tooling/generate-dashboard-screenshots.ts` | Playwright capture of README dashboard screenshots into `docs/` |
 | `out/` | Publishable npm package (gitignored); produced by `npm run build` |
 | `packages/runtime/` | Pyodide runtime that executes DeepEval in-process |
 | `packages/nodes/` | n8n community nodes (built to `packages/nodes/dist`) |
+| `packages/dashboard/` | ABC dashboard hooks (backend CJS + bridge IIFE + Vite React app) |
 | `packages/nodes/examples/` | Importable example workflow JSON per node (`{id}.workflow.json`) |
-| `e2e/` | Real-n8n E2E suite (`global-setup.ts`, `harness.ts`, `generated/*.e2e.test.ts`) |
-| `docs/` | README example-workflow screenshots (`{id}.example.png`) — **checked in** |
-| `README.md` | User-facing node catalog and config reference |
+| `e2e/` | Real-n8n E2E suite (`global-setup.ts`, `harness.ts`, `dashboard.e2e.test.ts`, `generated/*.e2e.test.ts`) |
+| `docs/` | README screenshots (`{id}.example.png` + `dashboard-*.example.png`) — **checked in** |
+| `README.md` | User-facing node catalog, dashboard how-to, and config reference |
 
 ## Development workflow
 
@@ -37,9 +39,25 @@ npm run check     # typecheck + lint + unit tests
 ### Build pipeline
 
 - `npm run generate` — runs `tooling/generate.ts`, then formats generated files under `packages/nodes/examples`, `packages/nodes/src/nodes`, and `e2e/generated`.
-- `npm run build` — `generate`, then `moon run runtime:build nodes:build`, then `tooling/assemble-out.ts` to produce root `out/`.
-- `out/` is the self-contained publishable package: `dist/`, `examples/`, `docs/`, `package.json` (peerDep `n8n-workflow` only; no runtime `dependencies`), plus `LICENSE` and `README.md`. Pyodide loads from bundled `dist/assets/pyodide/` (not the npm `pyodide` package).
+- `npm run build` — `generate`, then `moon run runtime:build nodes:build dashboard:build`, then `tooling/assemble-out.ts` to produce root `out/`. Missing dashboard dist fails assemble.
+- `out/` is the self-contained publishable package: `dist/`, `examples/`, `docs/`, `dashboard/` (hooks + bridge + app), `package.json` (peerDep `n8n-workflow` only; no runtime `dependencies`), plus `LICENSE` and `README.md`. Pyodide loads from bundled `dist/assets/pyodide/` (not the npm `pyodide` package).
 - First Moon build triggers `root:vendor` automatically: downloads pinned **DeepEval 4.0.7** and **Pyodide 0.27.7**, applies compatibility patches, verifies checksums, and builds local wheels. Generated assets live under gitignored paths (`vendor/`, `packages/runtime/assets/`, etc.) but are included in the published npm package. Run `npm run vendor` only when explicitly refreshing vendored assets.
+
+### Dashboard package
+
+`packages/dashboard` is TypeScript-only source (`.ts` / `.tsx`). Build outputs:
+
+| Artifact | Path |
+| --- | --- |
+| Backend hook (CJS) | `packages/dashboard/dist/backend/hooks.cjs` (also `out/dashboard/backend/hooks.cjs`) |
+| Bridge (IIFE) | `packages/dashboard/dist/bridge/index.js` |
+| React app | `packages/dashboard/dist/app/` |
+
+REST prefix: `/rest/deepeval-dashboard/`. Data plane is **Aggregate-only**: Trigger source Data Table + Aggregate results Data Table. Manual ABC questionnaire answers persist under `{N8N_USER_FOLDER}/deepeval-dashboard/questionnaire/{workflowId}.json`.
+
+`e2e/n8n-session.ts` and `dev:n8n` always set `EXTERNAL_HOOK_FILES` + `EXTERNAL_FRONTEND_HOOKS_URLS` and throw if hooks are missing. `dev:n8n` also starts the dashboard Vite HMR server (port 5174) and sets `deepevalDashboard_appUrl` so the Benchmarks iframe hot-reloads. End users may omit those env vars (no Benchmarks tab). Incomplete Aggregate pipelines return structured `400` JSON; the dashboard SetupPanel explains what is missing.
+
+Unit tests: `packages/dashboard/test/dashboard.test.ts`. E2E: `e2e/dashboard.e2e.test.ts`.
 
 ### Code generation
 
@@ -70,7 +88,7 @@ CI (`.github/workflows/ci.yml`): Ubuntu, Node 24, npm 11.13.0, Python 3.12 + set
 
 ## README screenshots (`docs/`)
 
-The README embeds **38** example-workflow screenshots — **36** under **Available Nodes** (one per node) plus **2** kitchen-sink workflows before that section. Filenames are `docs/{id}.example.png` where `{id}` matches `packages/nodes/examples/{id}.workflow.json`.
+The README embeds **40** screenshots — **38** example-workflow images (36 Available Nodes + 2 kitchen-sink) plus **2** dashboard images (`dashboard-report.example.png`, `dashboard-questionnaire.example.png`).
 
 ### When to update
 
@@ -79,15 +97,16 @@ Re-capture screenshots whenever any of these change:
 - An example workflow's canvas layout (nodes, connections, positions visible after Tidy Up)
 - Node display names or icons that appear on the canvas
 - The number of nodes (add/remove via `tooling/generate.ts` — also update README sections and screenshot set)
+- Dashboard UI layout, ABC report chrome, or questionnaire controls
 
 Do **not** let README ASCII wiring diagrams creep back in; use images only.
 
-### Capture process (one-shot, no checked-in tooling)
+### Capture process (workflow canvases)
 
-Screenshot capture is intentionally **not** committed as repo scripts. Re-run ad hoc when needed. The flow mirrors E2E setup:
+Screenshot capture for node examples is intentionally **not** committed as repo scripts. Re-run ad hoc when needed. The flow mirrors E2E setup:
 
 1. **Build** — `npm run build && npm run ensure-llamafile`
-2. **Boot one clean session** — same as E2E: temp `N8N_USER_FOLDER`, llamafile on a free port, n8n with `N8N_CUSTOM_EXTENSIONS=packages/nodes/dist`, owner setup, OpenAI credential → local llamafile base URL, source/results Data Tables. Reuse `startN8nSession()` from `e2e/n8n-session.ts`.
+2. **Boot one clean session** — same as E2E: temp `N8N_USER_FOLDER`, llamafile on a free port, n8n with `N8N_CUSTOM_EXTENSIONS=packages/nodes/dist`, **and** `EXTERNAL_HOOK_FILES` / `EXTERNAL_FRONTEND_HOOKS_URLS` pointing at the built dashboard (as `startN8nSession` does). Owner setup, OpenAI credential → local llamafile base URL, source/results Data Tables. Reuse `startN8nSession()` from `e2e/n8n-session.ts`.
 3. **Import each example** — for each `packages/nodes/examples/{id}.workflow.json`, run through `prepareWorkflow()` from `e2e/workflow-prep.ts`, then `POST /rest/workflows`. Keep n8n running for all imports (one session, not per-file restarts). Include kitchen-sink workflows when refreshing those screenshots.
 4. **Screenshot each workflow** — open `http://127.0.0.1:{port}/workflow/{workflowId}`, click **Tidy Up** (bottom-left canvas control), save full canvas viewport as `docs/{id}.example.png`.
    - **WSL note:** Cursor's embedded browser often cannot reach WSL `127.0.0.1`. Use Playwright/Chromium **on WSL** with auth from the E2E session cookie or `/rest/login` (`e2e@example.com` / `DeepEval-E2E-Password1` from `e2e/n8n-session.ts`).
@@ -103,7 +122,22 @@ Screenshot capture is intentionally **not** committed as repo scripts. Re-run ad
 
 6. **Tear down** — SIGTERM llamafile and n8n; delete temp user folder.
 
-Verify: `docs/` contains exactly 38 `*.example.png` files; README has no ` ```text ` blocks under Available Nodes.
+### Capture process (dashboard)
+
+Screenshots **must** be taken from a live n8n editor with the Benchmarks tab open (n8n chrome + iframe). Do not use standalone HTML mocks.
+
+```sh
+npm run build && npm run ensure-llamafile
+npx playwright install chromium   # once
+npx vite-node tooling/generate-dashboard-screenshots.ts
+```
+
+The script boots `startN8nSession()` (nodes + EXTERNAL_HOOK_*), creates an Aggregate-ready fixture workflow with seeded results, logs in via Playwright, opens `/workflow/{id}`, clicks the **Benchmarks** tab, and writes:
+
+- `docs/dashboard-report.example.png` — full editor with ABC report visible
+- `docs/dashboard-questionnaire.example.png` — same session scrolled to manual checklist answers
+
+Verify: `docs/` contains exactly 38 workflow `*.example.png` files plus the 2 dashboard screenshots; README has no ` ```text ` blocks under Available Nodes.
 
 ## Conventions for agents
 

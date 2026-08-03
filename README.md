@@ -8,7 +8,10 @@ Aggregate, and DeepEval Consistency.
     - [Install](#install)
   - [Architecture](#architecture)
     - [Required N8N Nodes](#required-n8n-nodes)
-    - [Optional Dashboard](#optional-dashboard)
+    - [Dashboard](#dashboard)
+      - [Enable hooks](#enable-hooks)
+      - [How to use](#how-to-use)
+      - [Artifacts](#artifacts)
   - [Kitchen-sink examples](#kitchen-sink-examples)
     - [Non-conversational kitchen sink](#non-conversational-kitchen-sink)
     - [Conversational kitchen sink](#conversational-kitchen-sink)
@@ -67,8 +70,8 @@ This package integrates [DeepEval](https://github.com/confident-ai/deepeval) int
 It requires Node.js 20 or newer. All 36 nodes are listed under n8n's `AI, LLM & Voice`
 category and are searchable with the `DeepEval Benchmarking` alias.
 
-The current package intentionally contains only the n8n nodes. The dashboard, dashboard
-hooks, Google Sheets adapters, and Microsoft Excel adapters are deferred.
+The package ships DeepEval n8n nodes plus an ABC dashboard (hooks + UI) under
+`dashboard/`. Google Sheets and Microsoft Excel adapters remain deferred.
 
 ### Install
 
@@ -77,6 +80,10 @@ Install the published community package in n8n:
 ```sh
 npm install n8n-nodes-deepeval
 ```
+
+Point n8n at the community nodes as usual (`N8N_CUSTOM_EXTENSIONS` or the UI
+install path). Enabling the dashboard UI is a separate, optional step — see
+[Dashboard](#dashboard).
 
 Repository development, testing, and contributor workflows are documented in [AGENTS.md](AGENTS.md).
 
@@ -107,10 +114,64 @@ option — it is not passed to DeepEval's Python metric constructor.
 
 Offered as N8N community nodes, these are the core components that allow you to integrate DeepEval into your N8N workflows. They are designed to be flexible and easy to use, enabling you to evaluate various data types and models directly within your N8N environment.
 
-### Optional Dashboard
+### Dashboard
 
-The dashboard is not included in this implementation. No frontend injection, hooks,
-parallel database, or transparent recording behavior is installed.
+The package always includes `dashboard/` (backend hooks, bridge, and React app). Enabling
+it in your n8n process is optional: if you never set `EXTERNAL_HOOK_FILES` /
+`EXTERNAL_FRONTEND_HOOKS_URLS`, n8n runs normally without a Benchmarks tab.
+
+The dashboard shows an [Agentic Benchmark Checklist (ABC)](https://uiuc-kang-lab.github.io/agentic-benchmarks/)
+report for the **currently open workflow**. Metric scores appear only when they flowed
+through **DeepEval Aggregate** into a results Data Table (Trigger source table + Aggregate
+sink). Incomplete workflows get a setup panel and `400` API responses — n8n itself stays up.
+
+![DeepEval ABC report](docs/dashboard-report.example.png)
+
+![DeepEval ABC questionnaire](docs/dashboard-questionnaire.example.png)
+
+#### Enable hooks
+
+After `npm install n8n-nodes-deepeval` (or a local `npm run build` that produces `out/`),
+start n8n with absolute paths to the shipped dashboard artifacts:
+
+```sh
+export EXTERNAL_HOOK_FILES=/absolute/path/to/node_modules/n8n-nodes-deepeval/dashboard/backend/hooks.cjs
+# or, from this repo after build:
+# export EXTERNAL_HOOK_FILES=/absolute/path/to/out/dashboard/backend/hooks.cjs
+
+export EXTERNAL_FRONTEND_HOOKS_URLS=http://127.0.0.1:5678/rest/deepeval-dashboard/bridge.js
+export N8N_SECURE_COOKIE=false
+n8n start
+```
+
+Optional Vite HMR (local dashboard package only): `npm run dev:n8n` starts Vite on port
+`5174` and sets `deepevalDashboard_appUrl` automatically. For a manual n8n process, set
+`deepevalDashboard_appUrl` to the Vite URL (base `/rest/deepeval-dashboard/app/`).
+
+This repository’s `dev:n8n` and E2E sessions always enable the hooks and fail if
+`packages/dashboard/dist` or `out/dashboard` is missing.
+
+#### How to use
+
+1. Build an evaluation workflow: **Data Table (Get)** → **DeepEval Trigger** → metrics →
+   **DeepEval Aggregate** → **Data Table (Insert)** (see Aggregate wiring below).
+2. Run the workflow so Aggregate persists rows into the results Data Table.
+3. Keep the workflow open (`/workflow/{id}`), then open the **Benchmarks** tab next to
+   Evaluations.
+4. Review auto-scored ABC pillars (Task Validity, Outcome Validity, Benchmark Reporting).
+5. Fill the **manual questionnaire** for human-only checklist items (answers persist per
+   workflow under the n8n user folder). Unanswered manual items are excluded from the
+   overall score until answered.
+6. Download **PDF** or the **zip artifact**.
+
+#### Artifacts
+
+The zip contains:
+
+- `input.json` / `input.csv` — source Data Table rows
+- `output.json` / `output.csv` — Aggregate results Data Table rows
+- `report.pdf` — ABC summary
+- `report.json` — full machine-readable report (including questionnaire answers)
 
 ## Kitchen-sink examples
 

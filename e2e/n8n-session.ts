@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
+import { dashboardBridgeUrl, dashboardHooksPath } from './dashboard-paths.js';
 import {
   customExtensionsDirectory,
   type E2ETestTarget,
@@ -31,6 +32,8 @@ export interface N8nSession {
 
 export interface StartN8nSessionOptions {
   testTarget?: E2ETestTarget;
+  port?: number;
+  dashboardAppUrl?: string;
 }
 
 interface ApiResponse<T> {
@@ -134,7 +137,9 @@ async function stopProcess(child: ChildProcess): Promise<void> {
 }
 
 export async function startN8nSession(options: StartN8nSessionOptions = {}): Promise<N8nSession> {
-  const extensionsDir = customExtensionsDirectory(options.testTarget ?? parseE2ETestTarget());
+  const testTarget = options.testTarget ?? parseE2ETestTarget();
+  const extensionsDir = customExtensionsDirectory(testTarget);
+  const hooksPath = dashboardHooksPath(testTarget);
   const userFolder = await mkdtemp(resolve(tmpdir(), 'n8n-deepeval-e2e-'));
   const logPath = resolve(userFolder, 'n8n.log');
   const logStream = createWriteStream(logPath, { flags: 'a' });
@@ -166,7 +171,7 @@ export async function startN8nSession(options: StartN8nSessionOptions = {}): Pro
   let child: ChildProcess | undefined;
   try {
     const model = await waitForLlamafile(inferenceBaseUrl, llamafile);
-    const port = await freePort();
+    const port = options.port ?? (await freePort());
     let runnerPort = await freePort();
     while (runnerPort === port || runnerPort === inferencePort) runnerPort = await freePort();
     const baseUrl = `http://127.0.0.1:${port}`;
@@ -189,6 +194,9 @@ export async function startN8nSession(options: StartN8nSessionOptions = {}): Pro
         N8N_RUNNERS_ENABLED: 'false',
         N8N_COMMUNITY_PACKAGES_ENABLED: 'true',
         N8N_CUSTOM_EXTENSIONS: extensionsDir,
+        EXTERNAL_HOOK_FILES: hooksPath,
+        EXTERNAL_FRONTEND_HOOKS_URLS: dashboardBridgeUrl(baseUrl),
+        ...(options.dashboardAppUrl ? { deepevalDashboard_appUrl: options.dashboardAppUrl } : {}),
         N8N_ENCRYPTION_KEY: 'deepeval-e2e-encryption-key',
         N8N_LOG_LEVEL: 'info',
       },
