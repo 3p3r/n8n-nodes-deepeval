@@ -6,6 +6,7 @@ import {
   NodeConnectionTypes,
   NodeOperationError,
 } from 'n8n-workflow';
+import { getDataTableOptions } from '../../shared/data-tables.js';
 import { getExecutingWorkflowGraph, hashCanonicalWorkflow } from '../../shared/workflowCaseId.js';
 
 function parseObject(value: unknown, label: string): Record<string, unknown> {
@@ -40,11 +41,13 @@ export class DeepEvalTrigger implements INodeType {
         default: 'DeepEval Benchmark',
       },
       {
-        displayName: 'Data Table ID',
+        displayName: 'Data Table',
         name: 'dataTableId',
-        type: 'string',
+        type: 'options',
         required: true,
         default: '',
+        typeOptions: { loadOptionsMethod: 'getDataTables' },
+        description: 'The n8n Data Table to use; choose from the list or switch to an expression',
       },
       {
         displayName: 'Column Mapping',
@@ -84,6 +87,10 @@ export class DeepEvalTrigger implements INodeType {
         displayOptions: { show: { limitRows: [true] } },
       },
     ],
+  };
+
+  methods = {
+    loadOptions: { getDataTables: getDataTableOptions },
   };
 
   async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {

@@ -12,6 +12,7 @@ import {
   computeCaseConsistency,
   type MetricResult,
 } from '../../shared/consistency.js';
+import { getDataTableOptions } from '../../shared/data-tables.js';
 
 function readAggregateRun(item: INodeExecutionData): AggregateRun {
   const { score, success, metrics, evalContext } = item.json;
@@ -113,11 +114,13 @@ export class DeepEvalConsistency implements INodeType {
         ],
       },
       {
-        displayName: 'Data Table ID',
+        displayName: 'Data Table',
         name: 'dataTableId',
-        type: 'string',
+        type: 'options',
         required: true,
         default: '',
+        typeOptions: { loadOptionsMethod: 'getDataTables' },
+        description: 'The n8n Data Table to use; choose from the list or switch to an expression',
       },
       {
         displayName: 'Write Mode',
@@ -154,6 +157,10 @@ export class DeepEvalConsistency implements INodeType {
         default: 'stats',
       },
     ],
+  };
+
+  methods = {
+    loadOptions: { getDataTables: getDataTableOptions },
   };
 
   async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {

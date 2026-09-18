@@ -6,6 +6,7 @@ import {
   NodeConnectionTypes,
   NodeOperationError,
 } from 'n8n-workflow';
+import { getDataTableOptions } from '../../shared/data-tables.js';
 
 interface MetricResult {
   metric: string;
@@ -59,11 +60,13 @@ export class DeepEvalAggregate implements INodeType {
     outputs: [{ type: NodeConnectionTypes.Main, displayName: 'Aggregate Result' }],
     properties: [
       {
-        displayName: 'Data Table ID',
+        displayName: 'Data Table',
         name: 'dataTableId',
-        type: 'string',
+        type: 'options',
         required: true,
         default: '',
+        typeOptions: { loadOptionsMethod: 'getDataTables' },
+        description: 'The n8n Data Table to use; choose from the list or switch to an expression',
       },
       {
         displayName: 'Pass Rule',
@@ -111,6 +114,10 @@ export class DeepEvalAggregate implements INodeType {
         default: 'metrics',
       },
     ],
+  };
+
+  methods = {
+    loadOptions: { getDataTables: getDataTableOptions },
   };
 
   async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
