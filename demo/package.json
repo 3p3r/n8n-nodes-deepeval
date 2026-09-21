@@ -1,0 +1,29 @@
+{
+  "name": "n8n-nodes-deepeval-demo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Remotion + Playwright pipeline that records a live n8n DeepEval demo",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "record": "cd .. && npx vite-node demo/capture/record.ts",
+    "transcode": "npx vite-node capture/transcode.ts",
+    "narrate": "npx vite-node capture/narrate-cli.ts",
+    "studio": "npx remotion studio src/index.ts",
+    "render": "npx vite-node capture/assemble.ts",
+    "mux": "npx vite-node capture/mux-cli.ts",
+    "renarrate": "npm run narrate && npm run render && npm run mux",
+    "build:video": "npm run record && npm run transcode && npm run narrate && npm run render && npm run mux"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.382",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
+    "remotion": "^4.0.382"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^5.9.3"
+  }
+}

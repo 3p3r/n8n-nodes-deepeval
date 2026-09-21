@@ -26,7 +26,8 @@
     "pack:out": "npm run build && cd out && npm pack",
     "dev:n8n": "npm run ensure-llamafile && vite-node tooling/launch-n8n.ts",
     "dashboard:build": "moon run dashboard:build",
-    "dashboard:dev": "npm run dashboard:build && npm run --workspace @n8n-deepeval/dashboard dev:app"
+    "dashboard:dev": "npm run dashboard:build && npm run --workspace @n8n-deepeval/dashboard dev:app",
+    "renarrate": "npm run --prefix demo renarrate"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.3",

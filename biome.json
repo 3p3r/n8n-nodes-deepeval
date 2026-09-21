@@ -6,7 +6,17 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!**/node_modules", "!**/dist", "!**/vendor", "!packages/runtime/assets"]
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/vendor",
+      "!packages/runtime/assets",
+      "!demo/recordings",
+      "!demo/public",
+      "!demo/out",
+      "!demo/.remotion"
+    ]
   },
   "formatter": {
     "enabled": true,

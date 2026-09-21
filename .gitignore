@@ -11,6 +11,15 @@ packages/runtime/assets/
 
 .capture-session.json
 
+# Demo pipeline generated artifacts. Keep public/harvard.mp3 and public/ambient.mp3.
+demo/recordings/
+demo/.remotion/
+demo/out/
+demo/public/*.mp4
+demo/public/*.wav
+demo/public/*-cues.json
+demo/src/*.generated.json
+
 # Logs
 logs
 *.log
