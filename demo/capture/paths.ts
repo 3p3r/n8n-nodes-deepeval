@@ -13,7 +13,7 @@ export const outDir = resolve(demoRoot, 'out');
 export const voiceDir = resolve(recordingsDir, 'voice');
 export const timingsPath = resolve(demoRoot, 'src/scene-timings.generated.json');
 export const timestampsPath = resolve(recordingsDir, 'timestamps.json');
-export const demoVttPath = resolve(demoRoot, 'src/n8n-nodes-deepeval-demo-datatables.vtt');
+export const demoVttPath = resolve(demoRoot, 'src/n8n-nodes-deepeval-demo.vtt');
 export const voiceMixPath = resolve(publicDir, 'voice.wav');
 export const voiceCuesPath = resolve(publicDir, 'voice-cues.json');
 export const ambientPath = resolve(publicDir, 'ambient.mp3');
@@ -25,8 +25,8 @@ export const outroPath = resolve(publicDir, 'outro.mp4');
 export const captionsAssPath = resolve(recordingsDir, 'captions.ass');
 
 export const SCENE_IDS = [
-  'dt-01-source',
-  'dt-02-canvas',
+  'dt-01-workflow',
+  'dt-02-tables',
   'dt-03-trigger',
   'dt-04-metrics',
   'dt-05-persist',

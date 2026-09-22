@@ -306,6 +306,19 @@ export async function tidyUp(page: Page): Promise<void> {
   }
 }
 
+export async function zoomToFit(page: Page): Promise<void> {
+  const button = page.getByRole('button', { name: 'Zoom to Fit' });
+  if ((await button.count()) > 0) {
+    await button
+      .first()
+      .click({ timeout: 2_000, force: true })
+      .catch(() => undefined);
+    await hold(page, 400);
+  }
+  await page.keyboard.press('1').catch(() => undefined);
+  await hold(page, 400);
+}
+
 export async function ndvIsOpen(page: Page): Promise<boolean> {
   const ndv = page.locator('[data-test-id="ndv"], [data-test-id="ndv-modal"]');
   if ((await ndv.count()) === 0) return false;
@@ -316,7 +329,11 @@ export async function ndvIsOpen(page: Page): Promise<boolean> {
 }
 
 export async function canvasNode(page: Page, name: string): Promise<Locator> {
-  return page.locator(`[data-node-name="${name}"]`).first();
+  const index = await page.locator('[data-node-name]').evaluateAll((nodes, expected) => {
+    return nodes.findIndex((node) => node.getAttribute('data-node-name') === expected);
+  }, name);
+  if (index < 0) return page.locator('[data-node-name="__deepeval_missing_node__"]');
+  return page.locator('[data-node-name]').nth(index);
 }
 
 export async function nodeExists(page: Page, name: string): Promise<boolean> {
@@ -327,17 +344,59 @@ export async function nodeExists(page: Page, name: string): Promise<boolean> {
 export async function openNode(page: Page, name: string): Promise<boolean> {
   const node = await canvasNode(page, name);
   if ((await node.count()) === 0) return false;
-  await clickLocator(page, node, 12);
-  await hold(page, 250);
-  await node.dblclick();
+  const box = await node.boundingBox();
+  if (box) {
+    await page.mouse.dblclick(
+      box.x + Math.min(24, box.width / 2),
+      box.y + Math.min(24, box.height / 2),
+    );
+  } else {
+    await node.dblclick({ force: true }).catch(() => undefined);
+  }
   const ndv = page.locator('[data-test-id="ndv"], [data-test-id="ndv-modal"]');
   try {
-    await ndv.first().waitFor({ state: 'visible', timeout: 8_000 });
+    await ndv.first().waitFor({ state: 'visible', timeout: 3_000 });
+    await hold(page, 400);
+    return true;
+  } catch {
+    await page.keyboard.press('Enter').catch(() => undefined);
+  }
+  try {
+    await ndv.first().waitFor({ state: 'visible', timeout: 3_000 });
     await hold(page, 400);
     return true;
   } catch {
     return false;
   }
+}
+
+export async function renameNode(page: Page, fromName: string, toName: string): Promise<boolean> {
+  if (fromName === toName) return true;
+  if (!(await ndvIsOpen(page))) {
+    const opened = await openNode(page, fromName);
+    if (!opened) return false;
+  }
+  const preview = page
+    .locator(
+      '[data-test-id="ndv"] [data-test-id="node-title-container"] [data-test-id="inline-edit-preview"], [data-test-id="ndv"] [data-test-id="inline-edit-preview"]',
+    )
+    .first();
+  try {
+    await preview.click({ timeout: 3_000 });
+    await hold(page, 200);
+    const input = page.locator('[data-test-id="ndv"] [data-test-id="inline-edit-input"]').first();
+    if ((await input.count()) > 0) {
+      await input.fill(toName);
+    } else {
+      await page.keyboard.press('Control+A');
+      await page.keyboard.insertText(toName);
+    }
+    await page.keyboard.press('Enter');
+    await hold(page, 400);
+  } catch {
+    return false;
+  }
+  return await nodeExists(page, toName);
 }
 
 export async function closeNDV(page: Page): Promise<void> {
@@ -357,58 +416,65 @@ export async function closeNDV(page: Page): Promise<void> {
   await parkMouse(page);
 }
 
-async function openNodeCreator(page: Page): Promise<boolean> {
+async function creatorIsOpen(page: Page): Promise<boolean> {
   const already = page.locator('[data-test-id="node-creator"]');
-  if (
-    (await already.count()) > 0 &&
-    (await already
+  if ((await already.count()) === 0) return false;
+  return await already
+    .first()
+    .isVisible()
+    .catch(() => false);
+}
+
+async function openNodeCreator(page: Page): Promise<boolean> {
+  if (await creatorIsOpen(page)) return true;
+
+  const coachmark = page.locator('[data-test-id="node-creator-shortcut-coachmark__button"]');
+  if ((await coachmark.count()) > 0) {
+    await coachmark
       .first()
-      .isVisible()
-      .catch(() => false))
-  ) {
-    return true;
+      .click({ timeout: 800, force: true })
+      .catch(() => undefined);
+    await hold(page, 200);
   }
 
-  const triggers = [
-    '[data-test-id="canvas-add-first-step-button"]',
-    '[data-test-id="instance-ai-canvas-build-manually"]',
-    '[data-test-id="canvas-plus-button"]',
-    '[data-test-id="node-creator-plus-button"]',
-    '[data-test-id="canvas-add-button"]',
-  ];
-  for (const selector of triggers) {
-    const locator = page.locator(selector);
-    if ((await locator.count()) === 0) continue;
-    try {
-      await clickLocator(page, locator, 8);
-      await hold(page, 400);
-      if ((await already.count()) > 0) return true;
-    } catch {
-      // try next
-    }
-  }
-
-  await page.keyboard.press('Tab').catch(() => undefined);
-  await hold(page, 400);
-  if ((await already.count()) > 0) return true;
-
-  const canvas = page.locator('[data-test-id="canvas"], [data-test-id="workflow-canvas-host"]');
-  if ((await canvas.count()) > 0) {
-    const box = await canvas.first().boundingBox();
+  const plus = page.getByRole('button', { name: 'Open nodes panel' });
+  if ((await plus.count()) > 0) {
+    const box = await plus.first().boundingBox();
     if (box) {
-      await page.mouse.dblclick(box.x + box.width / 2, box.y + box.height / 2);
-      await hold(page, 400);
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+      await hold(page, 800);
+      if (await creatorIsOpen(page)) return true;
     }
+    await plus
+      .first()
+      .click({ timeout: 2_000, force: true })
+      .catch(() => undefined);
+    await hold(page, 800);
+    if (await creatorIsOpen(page)) return true;
   }
-  return (await already.count()) > 0;
+
+  await page.keyboard.press('n').catch(() => undefined);
+  await hold(page, 500);
+  return await creatorIsOpen(page);
+}
+
+async function canvasNodeNames(page: Page): Promise<string[]> {
+  return await page
+    .locator('[data-node-name]')
+    .evaluateAll((nodes) =>
+      nodes
+        .map((node) => node.getAttribute('data-node-name') ?? '')
+        .filter((name) => name.length > 0),
+    );
 }
 
 export async function addNodeViaCreator(
   page: Page,
   search: string,
   itemName: string,
+  options?: { allowDuplicate?: boolean; actionName?: string },
 ): Promise<boolean> {
-  if (await nodeExists(page, itemName)) return true;
+  if (!options?.allowDuplicate && (await nodeExists(page, itemName))) return true;
   const opened = await openNodeCreator(page);
   if (!opened) return false;
 
@@ -429,23 +495,51 @@ export async function addNodeViaCreator(
   }
   await hold(page, 700);
 
+  const beforeNames = new Set(await canvasNodeNames(page));
   const items = page.locator('[data-test-id="node-creator-item-name"]');
   const exact = items.filter({ hasText: new RegExp(`^${escapeRegExp(itemName)}$`) }).first();
-  const match = (await exact.count()) > 0 ? exact : items.filter({ hasText: itemName }).first();
-  try {
-    if ((await match.count()) > 0) {
-      await clickLocator(page, match, 8);
-    } else {
-      await page.getByText(itemName, { exact: true }).first().click({ timeout: 5_000 });
+  const loose = items.filter({ hasText: new RegExp(escapeRegExp(itemName), 'i') }).first();
+  const match =
+    (await exact.count()) > 0 ? exact : (await loose.count()) > 0 ? loose : items.first();
+  const box = (await match.count()) > 0 ? await match.boundingBox() : null;
+  if (box) {
+    await page.mouse.click(box.x + Math.min(24, box.width / 2), box.y + box.height / 2);
+    await hold(page, 700);
+  }
+  if (options?.actionName) {
+    const action = page
+      .locator('[data-test-id="node-creator-item-name"]')
+      .filter({ hasText: new RegExp(`^${escapeRegExp(options.actionName)}$`) })
+      .first();
+    try {
+      await action.waitFor({ state: 'visible', timeout: 3_000 });
+      const actionBox = await action.boundingBox();
+      if (actionBox) {
+        await page.mouse.click(actionBox.x + 16, actionBox.y + actionBox.height / 2);
+        await hold(page, 900);
+      }
+    } catch {
+      console.info(`Creator action ${options.actionName} was not listed`);
     }
-  } catch {
+  }
+  let addedName = (await canvasNodeNames(page)).find((name) => !beforeNames.has(name));
+  if (!addedName) {
+    await page.keyboard.press('Enter').catch(() => undefined);
+    await hold(page, 900);
+    addedName = (await canvasNodeNames(page)).find((name) => !beforeNames.has(name));
+  }
+  if (!addedName) {
+    console.info(
+      `No new node after selecting ${itemName}; canvas: ${(await canvasNodeNames(page)).join(', ')}`,
+    );
     await page.keyboard.press('Escape').catch(() => undefined);
     return false;
   }
 
-  await hold(page, 900);
+  await hold(page, 400);
   await closeNodeCreator(page);
   await parkMouse(page);
+  if (options?.allowDuplicate) return true;
   return await nodeExists(page, itemName);
 }
 
@@ -641,13 +735,25 @@ async function clickNodePlus(
   await hold(page, 350);
 
   const scoped = page.locator(`[data-node-name="${name}"]`);
+  const handlePlus = scoped.locator('[data-test-id="canvas-handle-plus"]');
+  const handleCount = await handlePlus.count();
+  let outputPlus = handlePlus.last();
+  if (handleCount > 1) {
+    let bestX = Number.NEGATIVE_INFINITY;
+    for (let index = 0; index < handleCount; index++) {
+      const box = await handlePlus.nth(index).boundingBox();
+      if (!box || box.x < bestX) continue;
+      bestX = box.x;
+      outputPlus = handlePlus.nth(index);
+    }
+  }
   const plusSelectors = [
+    outputPlus,
     position === 'bottom'
       ? scoped.locator('.vue-flow__handle-bottom [data-test-id*="plus"], .vue-flow__handle-bottom')
       : scoped.locator('.vue-flow__handle-right [data-test-id*="plus"], .vue-flow__handle-right'),
     scoped.locator('[data-test-id="canvas-plus-button"]'),
     scoped.locator('[data-test-id="canvas-node-plus"]'),
-    scoped.locator('[data-test-id*="plus"]').last(),
   ];
   for (const locator of plusSelectors) {
     if ((await locator.count()) === 0) continue;
@@ -677,17 +783,18 @@ export async function addFromNodePlus(
   search: string,
   itemName: string,
   plus: 'right' | 'bottom' = 'right',
+  options?: { actionName?: string },
 ): Promise<boolean> {
   if (await nodeExists(page, itemName)) return true;
   if (await ndvIsOpen(page)) await closeNDV(page);
   const opened = await clickNodePlus(page, sourceName, plus);
   if (!opened) return false;
-  return await addNodeViaCreator(page, search, itemName);
+  return await addNodeViaCreator(page, search, itemName, options);
 }
 
 async function edgeCount(page: Page): Promise<number> {
   return page
-    .locator('.vue-flow__edge, [data-test-id="edge"], [data-test-id="canvas-edge"]')
+    .locator('[data-test-id="edge"], .vue-flow__edge, [data-test-id="canvas-edge"]')
     .count();
 }
 
@@ -711,10 +818,13 @@ export async function canvasHasEdge(
       );
       const edges = [
         ...document.querySelectorAll(
-          '.vue-flow__edge, [data-test-id="edge"], [data-test-id="canvas-edge"]',
+          '[data-test-id="edge"], .vue-flow__edge, [data-test-id="canvas-edge"]',
         ),
       ];
       return edges.some((edge) => {
+        const srcName = edge.getAttribute('data-source-node-name') ?? '';
+        const tgtName = edge.getAttribute('data-target-node-name') ?? '';
+        if (srcName === fromName && tgtName === toName) return true;
         const src = edge.getAttribute('data-source') ?? '';
         const tgt = edge.getAttribute('data-target') ?? '';
         const blob = `${src} ${tgt} ${edge.getAttribute('data-id') ?? ''} ${edge.id}`;
@@ -867,7 +977,7 @@ export async function openProjectDataTables(
   });
   await ensureVisibleCursor(page);
   await page
-    .getByText(/DeepEval Source|DeepEval Results|Data tables|Data Tables/i)
+    .getByText(/Support Cases|Reply Scores|Data tables|Data Tables/i)
     .first()
     .waitFor({ state: 'visible', timeout: 45_000 });
   await dismissModals(page);
@@ -903,34 +1013,33 @@ export async function openNamedDataTable(
 export async function tourDataTableGrid(page: Page): Promise<void> {
   const header = page.locator('.ag-header-cell, [role="columnheader"]');
   const headerCount = await header.count();
-  for (let i = 0; i < Math.min(headerCount, 6); i++) {
+  for (let i = 0; i < Math.min(headerCount, 4); i++) {
     const cell = header.nth(i);
     if (await cell.isVisible().catch(() => false)) {
       await cell.hover().catch(() => undefined);
-      await hold(page, 420);
+      await hold(page, 200);
     }
   }
 
   const cells = page.locator('.ag-cell, [role="gridcell"]');
   const cellCount = await cells.count();
-  for (let i = 0; i < Math.min(cellCount, 8); i++) {
+  for (let i = 0; i < Math.min(cellCount, 4); i++) {
     const cell = cells.nth(i);
     if (await cell.isVisible().catch(() => false)) {
       await cell.hover().catch(() => undefined);
-      await hold(page, 380);
+      await hold(page, 150);
     }
   }
 
   const highlight = page
-    .getByText('The answer is 4.', { exact: false })
-    .or(page.getByText('actualOutput', { exact: true }))
+    .getByText('order 1042', { exact: false })
     .or(page.getByText('overallScore', { exact: true }))
     .or(page.getByText('runId', { exact: true }));
   if ((await highlight.count()) > 0) {
     try {
       await highlight.first().scrollIntoViewIfNeeded();
       await highlight.first().click({ timeout: 2_000 });
-      await hold(page, 1_400);
+      await hold(page, 600);
     } catch {
       // cell click is optional
     }
@@ -944,14 +1053,14 @@ export async function tourDataTableGrid(page: Page): Promise<void> {
         el.scrollLeft = el.scrollWidth;
       })
       .catch(() => undefined);
-    await hold(page, 1_200);
+    await hold(page, 500);
     await viewport
       .first()
       .evaluate((el) => {
         el.scrollLeft = 0;
       })
       .catch(() => undefined);
-    await hold(page, 600);
+    await hold(page, 200);
   }
 
   const addRow = page.getByRole('button', { name: /Add row/i });
@@ -960,6 +1069,6 @@ export async function tourDataTableGrid(page: Page): Promise<void> {
       .first()
       .hover()
       .catch(() => undefined);
-    await hold(page, 800);
+    await hold(page, 300);
   }
 }

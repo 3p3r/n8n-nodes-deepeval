@@ -2,7 +2,7 @@ import type { FC } from 'react';
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 
 export const TitleCard: FC<{ subtitle?: string }> = ({
-  subtitle = 'Load cases from Data Tables, score them in-process, and write results back.',
+  subtitle = 'Add DeepEval to a workflow you already run.',
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();

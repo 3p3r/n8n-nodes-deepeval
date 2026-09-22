@@ -1,8 +1,8 @@
 # Demo
 
-Captions + Voicebox narration, ~4–5 minute 1080p walkthrough of a DeepEval Data Tables benchmark in n8n.
+Captions + Voicebox narration, 1080p walkthrough of adding DeepEval to a support-reply workflow that already exists in n8n. The finished video stays under six minutes.
 
-Spoken lines and on-screen captions live in [`src/n8n-nodes-deepeval-demo-datatables.vtt`](src/n8n-nodes-deepeval-demo-datatables.vtt). Each cue has two voices (they may differ):
+Spoken lines and on-screen captions live in [`src/n8n-nodes-deepeval-demo.vtt`](src/n8n-nodes-deepeval-demo.vtt). Each cue has two voices (they may differ):
 
 - `<v subtitle>` — burned-in caption while the cue is active. Omit for no bar (title / concept / outro).
 - `<v narrator>` — Voicebox TTS from the cue’s start time. Omit for silence.
@@ -43,7 +43,7 @@ Remotion only renders the title, concept, and outro cards (~30s). ffmpeg burns V
 
 | Script | What it does |
 | --- | --- |
-| `npm run record` | Boot n8n + llamafile via `startN8nSession({ testTarget: 'out' })`, record Data Table UI, editor, Results, and Benchmarks |
+| `npm run record` | Boot n8n + llamafile via `startN8nSession({ testTarget: 'out' })`, explain Support Reply, add cases and scores, then metrics, Aggregate, and Benchmarks |
 | `npm run transcode` | Parallel encode first→last scene of `full.webm` → `public/take.mp4`, retarget take cue times in the VTT |
 | `npm run narrate` | Voicebox TTS mix from `<v narrator>` cues |
 | `npm run renarrate` | `narrate` + `render` + `mux` (no recapture) |
@@ -53,11 +53,11 @@ Remotion only renders the title, concept, and outro cards (~30s). ffmpeg burns V
 
 ## Scenes
 
-1. Tour the DeepEval Source Data Table
-2. Create workflow **Support Agent Benchmark**
-3. Add DeepEval Trigger (cases from a Data Table)
-4. Add G-Eval + Bias + local OpenAI-compatible judge
-5. Add DeepEval Aggregate (pass rule + Results table insert)
+1. Explain the existing **Support Reply** workflow
+2. Open **Support Cases** and **Reply Scores**
+3. Add Load Cases and DeepEval Trigger
+4. Add G-Eval and Bias, using the chat model already on Draft Reply
+5. Add DeepEval Aggregate and Persist Results
 6. Execute
-7. Open the Results Data Table
+7. Open Reply Scores
 8. Open the Benchmarks ABC dashboard

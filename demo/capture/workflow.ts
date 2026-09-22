@@ -229,7 +229,36 @@ function loadSourceNode(context: DeepEvalE2EContext, position: [number, number])
   };
 }
 
-export async function ensureSourceHasActualOutput(context: DeepEvalE2EContext): Promise<void> {
+export const SUPPORT_INPUT = 'I was charged twice for order 1042. Please refund the duplicate.';
+export const SUPPORT_EXPECTED =
+  'Apologize for the duplicate charge on order 1042. Do not promise an immediate refund. Say billing will review it.';
+export const SUPPORT_ACTUAL =
+  'Sorry about the duplicate charge on order 1042. I cannot refund it from this chat, but I have flagged it for billing to review.';
+export const SOURCE_TABLE_NAME = 'Support Cases';
+export const RESULTS_TABLE_NAME = 'Reply Scores';
+export const WORKFLOW_NAME = 'Support Reply';
+
+const SUPPORT_ROW = {
+  input: SUPPORT_INPUT,
+  expectedOutput: SUPPORT_EXPECTED,
+  actualOutput: SUPPORT_ACTUAL,
+};
+
+async function renameDataTable(
+  context: DeepEvalE2EContext,
+  tableId: string,
+  name: string,
+): Promise<void> {
+  await api(context, `/rest/projects/${context.projectId}/data-tables/${tableId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ name }),
+  });
+}
+
+export async function seedSupportTables(context: DeepEvalE2EContext): Promise<void> {
+  await renameDataTable(context, context.sourceTableId, SOURCE_TABLE_NAME);
+  await renameDataTable(context, context.resultsTableId, RESULTS_TABLE_NAME);
+
   const base = `/rest/projects/${context.projectId}/data-tables/${context.sourceTableId}`;
   try {
     await api(context, `${base}/columns`, {
@@ -249,68 +278,195 @@ export async function ensureSourceHasActualOutput(context: DeepEvalE2EContext): 
   );
   const list = Array.isArray(rows) ? rows : (rows.data ?? []);
   const first = list[0];
-  if (!first) return;
-  if (typeof first.actualOutput === 'string' && first.actualOutput.length > 0) return;
+  if (!first) {
+    await api(context, `${base}/insert`, {
+      method: 'POST',
+      body: JSON.stringify({ data: [SUPPORT_ROW], returnType: 'all' }),
+    });
+    return;
+  }
 
   const columnName = first.id !== undefined ? 'id' : 'input';
   const value = first.id ?? first.input;
-  try {
-    await api(context, `${base}/rows`, {
-      method: 'PATCH',
-      body: JSON.stringify({
-        filter: {
-          type: 'and',
-          filters: [{ columnName, condition: 'eq', value }],
-        },
-        data: { actualOutput: 'The answer is 4.' },
-        returnData: false,
-      }),
-    });
-  } catch (error) {
-    console.info(`Update actualOutput: ${error instanceof Error ? error.message : String(error)}`);
-    await api(context, `${base}/insert`, {
-      method: 'POST',
-      body: JSON.stringify({
-        data: [
-          {
-            input: 'Use the calculator when appropriate, then answer: what is 2 + 2?',
-            expectedOutput: 'The answer is 4.',
-            actualOutput: 'The answer is 4.',
-          },
-        ],
-        returnType: 'all',
-      }),
-    });
-  }
+  await api(context, `${base}/rows`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      filter: {
+        type: 'and',
+        filters: [{ columnName, condition: 'eq', value }],
+      },
+      data: SUPPORT_ROW,
+      returnData: false,
+    }),
+  });
 }
 
-export async function seedDemoCanvasWithTables(
+export async function seedSupportReply(
   context: DeepEvalE2EContext,
   workflowId: string,
 ): Promise<void> {
   const current = await getWorkflow(context, workflowId);
+  const reply = `={{ $json.input }}\n\nReply in one or two sentences. Apologize for the duplicate charge. Do not promise an immediate refund. Say billing will review it.`;
   await putWorkflow(context, {
     ...current,
-    name: current.name || 'Support Agent Benchmark',
+    name: current.name || WORKFLOW_NAME,
     nodes: [
       {
         id: 'manual-trigger',
         name: 'When clicking Execute Workflow',
         type: 'n8n-nodes-base.manualTrigger',
         typeVersion: 1,
-        position: [240, 280],
+        position: [240, 300],
         parameters: {},
       },
-      loadSourceNode(context, [520, 280]),
-      persistNode(context, [1540, 280]),
+      {
+        id: 'ticket',
+        name: 'Ticket',
+        type: 'n8n-nodes-base.set',
+        typeVersion: 3.4,
+        position: [520, 300],
+        parameters: {
+          mode: 'raw',
+          jsonOutput: JSON.stringify({ input: SUPPORT_INPUT }),
+          options: {},
+        },
+      },
+      {
+        id: 'draft-reply',
+        name: 'Draft Reply',
+        type: '@n8n/n8n-nodes-langchain.agent',
+        typeVersion: 3.1,
+        position: [840, 300],
+        parameters: {
+          promptType: 'define',
+          text: reply,
+          options: {
+            systemMessage:
+              'You draft short support replies. Apologize for the duplicate charge. Do not promise an immediate refund. Say billing will review it.',
+          },
+        },
+      },
       {
         ...judgeNode(context),
-        position: [520, 560],
+        position: [840, 540],
       },
     ],
-    connections: mergeConnections(connect('When clicking Execute Workflow', 'Load Source Rows')),
+    connections: mergeConnections(
+      connect('When clicking Execute Workflow', 'Ticket'),
+      connect('Ticket', 'Draft Reply'),
+      {
+        'OpenAI Chat Model': {
+          ai_languageModel: [[{ node: 'Draft Reply', type: 'ai_languageModel', index: 0 }]],
+        },
+      },
+    ),
     settings: { executionOrder: 'v1' },
   });
+}
+
+function renameConnections(
+  connections: WorkflowDefinition['connections'],
+  from: string,
+  to: string,
+): WorkflowDefinition['connections'] {
+  if (from === to) return connections;
+  const next: WorkflowDefinition['connections'] = {};
+  for (const [source, byType] of Object.entries(connections)) {
+    const key = source === from ? to : source;
+    next[key] ??= {};
+    for (const [type, groups] of Object.entries(byType)) {
+      next[key][type] = groups.map((group) =>
+        group.map((link) => (link.node === from ? { ...link, node: to } : link)),
+      );
+    }
+  }
+  return next;
+}
+
+export async function configureEvalNodes(
+  context: DeepEvalE2EContext,
+  workflowId: string,
+): Promise<void> {
+  const current = await getWorkflow(context, workflowId);
+  if (!current.nodes.some((node) => node.name.startsWith('DeepEval'))) {
+    throw new Error('Editor had not saved the DeepEval nodes before configureEvalNodes');
+  }
+
+  const incoming = new Map<string, string[]>();
+  for (const [from, byType] of Object.entries(current.connections)) {
+    for (const group of byType.main ?? []) {
+      for (const link of group) {
+        const sources = incoming.get(link.node) ?? [];
+        sources.push(from);
+        incoming.set(link.node, sources);
+      }
+    }
+  }
+
+  const renames = new Map<string, string>();
+  const nodes = current.nodes.map((node) => {
+    if (node.name === 'DeepEval Trigger') {
+      return {
+        ...node,
+        parameters: {
+          ...node.parameters,
+          runName: WORKFLOW_NAME,
+          dataTableId: context.sourceTableId,
+          columnMapping:
+            '{"input":"input","expectedOutput":"expectedOutput","actualOutput":"actualOutput","output":"actualOutput"}',
+          filters: '{}',
+          limitRows: true,
+          maxRows: 1,
+          runsPerRow: 1,
+        },
+      };
+    }
+    if (node.name === 'DeepEval G-Eval') {
+      return {
+        ...node,
+        parameters: {
+          ...node.parameters,
+          name: 'Refund reply',
+          criteria:
+            'The reply apologizes for the duplicate charge and does not promise an immediate refund.',
+          evaluationParams: ['INPUT', 'ACTUAL_OUTPUT'],
+          threshold: 0.5,
+          strictMode: false,
+          asyncMode: true,
+          verboseMode: false,
+          cleanSession: false,
+        },
+      };
+    }
+    if (node.name === 'DeepEval Aggregate') {
+      return {
+        ...node,
+        parameters: {
+          ...node.parameters,
+          dataTableId: context.resultsTableId,
+          passRule: 'allPass',
+          writeMode: 'upsert',
+          runIdColumn: 'runId',
+          scoreColumn: 'overallScore',
+          successColumn: 'overallSuccess',
+          metricsColumn: 'metrics',
+        },
+      };
+    }
+    if (node.type !== 'n8n-nodes-base.dataTable') return node;
+    const sources = incoming.get(node.name) ?? [];
+    const persist = sources.includes('DeepEval Aggregate');
+    const name = persist ? 'Persist Results' : 'Load Cases';
+    if (node.name !== name) renames.set(node.name, name);
+    const shaped = persist
+      ? persistNode(context, node.position)
+      : loadSourceNode(context, node.position);
+    return { ...shaped, id: node.id, name, position: node.position };
+  });
+
+  let connections = current.connections;
+  for (const [from, to] of renames) connections = renameConnections(connections, from, to);
+  await putWorkflow(context, { ...current, nodes, connections });
 }
 
 export type PipelineStage = 'empty' | 'trigger' | 'metrics' | 'aggregate';
@@ -585,7 +741,7 @@ export async function seedDashboardData(
                 metric: 'DeepEval G-Eval',
                 score: 0.95,
                 success: true,
-                reason: 'The answer matches the expected arithmetic result.',
+                reason: 'The reply apologizes and does not promise an immediate refund.',
               },
               {
                 metric: 'Bias',

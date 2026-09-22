@@ -1,0 +1,76 @@
+WEBVTT
+
+NOTE subtitle = on-screen caption. narrator = Voicebox. They may differ.
+
+title
+00:00:00.000 --> 00:00:06.000
+<v subtitle>This demo uses AI generated assets.
+<v narrator>[narration] introducing Nathan's deep ee-val community nodes.
+
+concept
+00:00:06.000 --> 00:00:14.000
+<v narrator>[narration] Start from a workflow you already run. Then add cases, scores, and a benchmark around it.
+
+dt-01-workflow-1
+00:00:14.000 --> 00:00:25.284
+<v subtitle>Support Reply already drafts an answer to a billing complaint.
+<v narrator>[narration] This Support Reply workflow already drafts an answer to a billing complaint.
+
+dt-01-workflow-2
+00:00:25.284 --> 00:00:31.553
+<v subtitle>Draft Reply apologizes and does not promise an immediate refund.
+<v narrator>[narration] Draft Reply apologizes, and it does not promise an immediate refund.
+
+dt-02-tables-1
+00:00:34.859 --> 00:00:51.661
+<v subtitle>Support Cases holds the customer message, the reply you wanted, and a saved reply.
+<v narrator>[narration] Support Cases holds the customer message, the reply you wanted, and a saved reply. We use this table as our benchmark ground truth.
+
+dt-02-tables-2
+00:00:51.661 --> 00:01:00.708
+<v subtitle>Reply Scores is empty until Aggregate writes a row.
+<v narrator>[narration] Reply Scores is empty until the scores are written. We use this table as our benchmark output.
+
+dt-03-trigger-1
+00:01:05.544 --> 00:01:41.324
+<v subtitle>Load Cases reads Support Cases. DeepEval Trigger turns each row into one eval item with a runId.
+<v narrator>[narration] Load Cases reads the Support Cases table. The Trigger node turns each row into one eval item with a run identification.
+
+dt-03-trigger-2
+00:01:41.324 --> 00:02:12.977
+<v subtitle>The column map fills input, expectedOutput, and actualOutput from the table.
+<v narrator>[narration] Column mapping pulls the customer message, the reply you wanted, and the saved reply into the case.
+
+dt-04-metrics-1
+00:02:12.977 --> 00:03:11.101
+<v subtitle>G-Eval and Bias score the same case. The chat model already on Draft Reply is the judge.
+<v narrator>[narration] Jee eval and bias score the same case. The chat model already on Draft Reply is the judge.
+
+dt-05-persist-1
+00:03:11.101 --> 00:03:54.146
+<v subtitle>Aggregate puts both scores in one row. Persist Results inserts it into Reply Scores.
+<v narrator>[narration] The Aggregate node folds both scores into one row. Persist Results inserts that row into Reply Scores.
+
+dt-05-persist-2
+00:03:54.146 --> 00:04:22.543
+<v subtitle>The row has runId, overallScore, overallSuccess, and metrics JSON.
+
+dt-06-execute-1
+00:04:22.543 --> 00:04:35.825
+<v subtitle>Execute runs the existing reply path and the new benchmark path.
+<v narrator>[narration] Execute runs the existing reply path and the new benchmark path.
+
+dt-06-execute-2
+00:04:35.825 --> 00:04:42.116
+<v subtitle>G-Eval returns a score, a success flag, and a reason.
+<v narrator>[narration] Jee eval returns a score, a success flag, and a reason.
+
+dt-07-results-1
+00:04:45.524 --> 00:04:58.872
+<v subtitle>Reply Scores has the run that just finished.
+<v narrator>[narration] Reply Scores now holds the run that just finished.
+
+dt-08-dashboard-1
+00:05:03.889 --> 00:05:18.137
+<v subtitle>The Benchmarks tab reads those scores into an ABC report.
+<v narrator>[narration] The Benchmarks tab reads those scores into an Agentic Benchmark Checklist report.

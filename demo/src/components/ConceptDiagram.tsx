@@ -8,8 +8,8 @@ export const ConceptDiagram: FC<{
   steps?: Array<{ label: string; detail: string }>;
   footer?: string;
 }> = ({
-  heading = 'HOW DATA TABLES FIT',
-  title = 'Get cases in, insert scores out',
+  heading = 'ADD EVAL TO WHAT YOU ALREADY RUN',
+  title = 'Cases in, scores out, same workflow',
   steps = conceptSteps,
   footer = '',
 }) => {

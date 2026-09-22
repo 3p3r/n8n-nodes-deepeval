@@ -3,7 +3,7 @@ import { AbsoluteFill, Sequence, useCurrentFrame } from 'remotion';
 import { Caption } from './components/Caption';
 import { ConceptDiagram } from './components/ConceptDiagram';
 import { TitleCard } from './components/TitleCard';
-import demoVtt from './n8n-nodes-deepeval-demo-datatables.vtt';
+import demoVtt from './n8n-nodes-deepeval-demo.vtt';
 import { FPS, HEIGHT, WIDTH } from './script';
 import { activeSubtitle, bookendSpans, parseVtt } from './vtt';
 

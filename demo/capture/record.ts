@@ -11,6 +11,7 @@ import {
   addNodeViaCreator,
   clickExecute,
   closeNDV,
+  closeNodeCreator,
   dismissModals,
   dragConnect,
   dragConnectAiModel,
@@ -28,12 +29,14 @@ import {
   openProjectDataTables,
   openWorkflowEditor,
   parkMouse,
+  renameNode,
   renameWorkflow,
   selectDataTable,
   takeWriteLock,
   tidyUp,
   tourDataTableGrid,
   waitForNodeSuccess,
+  zoomToFit,
 } from './n8n-ui.js';
 import {
   debugDir,
@@ -45,13 +48,16 @@ import {
 } from './paths.js';
 import {
   api,
+  configureEvalNodes,
   createWorkflow,
-  ensureSourceHasActualOutput,
+  RESULTS_TABLE_NAME,
+  SOURCE_TABLE_NAME,
   seedDashboardData,
-  seedDemoCanvasWithTables,
+  seedSupportReply,
+  seedSupportTables,
+  WORKFLOW_NAME,
 } from './workflow.js';
 
-const WORKFLOW_NAME = 'Support Agent Benchmark';
 const EXECUTE_TIMEOUT_MS = 180_000;
 const COLUMN_MAPPING =
   '{"input":"input","expectedOutput":"expectedOutput","actualOutput":"actualOutput","output":"actualOutput"}';
@@ -106,7 +112,7 @@ async function showNode(page: Page, name: string, fill?: Array<[string, string]>
       else await fillParameter(page, parameter, value);
     }
   }
-  await hold(page, 2_400);
+  await hold(page, 1_200);
   await closeNDV(page);
 }
 
@@ -184,11 +190,58 @@ async function waitForResultsRow(n8n: DeepEvalE2EContext, timeoutMs: number): Pr
   return false;
 }
 
+async function canvasNodeNames(page: Page): Promise<string[]> {
+  return await page
+    .locator('[data-node-name]')
+    .evaluateAll((nodes) =>
+      nodes
+        .map((node) => node.getAttribute('data-node-name') ?? '')
+        .filter((name) => name.length > 0),
+    );
+}
+
+async function addDataTableFrom(
+  page: Page,
+  fromName: string,
+  desiredName: string,
+  actionName: string,
+): Promise<void> {
+  const before = new Set(await canvasNodeNames(page));
+  await addFromNodePlus(page, fromName, 'Data table', 'Data table', 'right', { actionName });
+  await hold(page, 500);
+  let created = (await canvasNodeNames(page)).find((name) => !before.has(name));
+  if (!created) {
+    console.info(`Plus-add missed ${desiredName}; falling back to creator`);
+    await addNodeViaCreator(page, 'Data table', 'Data table', {
+      allowDuplicate: true,
+      actionName,
+    });
+    await hold(page, 500);
+    created = (await canvasNodeNames(page)).find((name) => !before.has(name));
+  }
+  if (!created) {
+    const labels = await page
+      .locator('[data-test-id="node-creator-item-name"]')
+      .allTextContents()
+      .catch(() => []);
+    console.info(`Creator items: ${labels.slice(0, 12).join(' | ')}`);
+    await dumpDebug(page, `missing-data-table-${desiredName.replaceAll(' ', '-')}`);
+    throw new Error(`Data table node was not added from ${fromName}`);
+  }
+  if (created !== desiredName) {
+    await zoomToFit(page);
+    const renamed = await renameNode(page, created, desiredName);
+    if (!renamed) console.info(`Could not rename ${created} to ${desiredName}`);
+  }
+  if (await ndvIsOpen(page)) await closeNDV(page);
+  await closeNodeCreator(page);
+}
+
 async function record(session: N8nSession, browser: Browser): Promise<string> {
   const n8n = session.context;
-  await ensureSourceHasActualOutput(n8n);
+  await seedSupportTables(n8n);
   const created = await createWorkflow(n8n, WORKFLOW_NAME);
-  await seedDemoCanvasWithTables(n8n, created.id);
+  await seedSupportReply(n8n, created.id);
 
   const browserContext = await authedContext(browser, n8n);
   await installVisibleCursor(browserContext);
@@ -206,71 +259,95 @@ async function record(session: N8nSession, browser: Browser): Promise<string> {
   };
 
   try {
-    await openProjectDataTables(page, n8n.baseUrl, n8n.projectId);
-    await hold(page, 400);
-
-    markStart('dt-01-source');
-    const sourceCard = page.getByText('DeepEval Source', { exact: true }).first();
-    if ((await sourceCard.count()) > 0) {
-      await sourceCard.hover().catch(() => undefined);
-      await hold(page, 1_000);
-    }
-    const resultsCard = page.getByText('DeepEval Results', { exact: true }).first();
-    if ((await resultsCard.count()) > 0) {
-      await resultsCard.hover().catch(() => undefined);
-      await hold(page, 900);
-    }
-    await openNamedDataTable(
-      page,
-      n8n.baseUrl,
-      n8n.projectId,
-      n8n.sourceTableId,
-      'DeepEval Source',
-    );
-    await tourDataTableGrid(page);
-    await hold(page, 1_600);
-    markEnd('dt-01-source');
-
     await openWorkflowEditor(page, n8n.baseUrl, created.id);
     await dismissModals(page);
     await takeWriteLock(page);
-    await hold(page, 800);
+    await hold(page, 500);
 
-    markStart('dt-02-canvas');
+    markStart('dt-01-workflow');
     try {
       await renameWorkflow(page, WORKFLOW_NAME);
     } catch {
       // name field may already match
     }
     await tidyUp(page);
-    await hold(page, 1_200);
-    await showNode(page, 'Load Source Rows');
-    await hold(page, 800);
-    markEnd('dt-02-canvas');
+    await hold(page, 700);
+    await showNode(page, 'Ticket');
+    await showNode(page, 'Draft Reply');
+    await parkMouse(page);
+    await hold(page, 600);
+    markEnd('dt-01-workflow');
+
+    await openProjectDataTables(page, n8n.baseUrl, n8n.projectId);
+    await hold(page, 300);
+
+    markStart('dt-02-tables');
+    const sourceCard = page.getByText(SOURCE_TABLE_NAME, { exact: true }).first();
+    if ((await sourceCard.count()) > 0) {
+      await sourceCard.hover().catch(() => undefined);
+      await hold(page, 500);
+    }
+    await openNamedDataTable(
+      page,
+      n8n.baseUrl,
+      n8n.projectId,
+      n8n.sourceTableId,
+      SOURCE_TABLE_NAME,
+    );
+    await tourDataTableGrid(page);
+    await hold(page, 500);
+    await openProjectDataTables(page, n8n.baseUrl, n8n.projectId);
+    const resultsCard = page.getByText(RESULTS_TABLE_NAME, { exact: true }).first();
+    if ((await resultsCard.count()) > 0) {
+      await resultsCard.hover().catch(() => undefined);
+      await hold(page, 400);
+    }
+    await openNamedDataTable(
+      page,
+      n8n.baseUrl,
+      n8n.projectId,
+      n8n.resultsTableId,
+      RESULTS_TABLE_NAME,
+    );
+    await tourDataTableGrid(page);
+    await hold(page, 400);
+    markEnd('dt-02-tables');
+
+    await openWorkflowEditor(page, n8n.baseUrl, created.id);
+    await dismissModals(page);
+    await takeWriteLock(page);
+    await hold(page, 400);
 
     markStart('dt-03-trigger');
-    await addConnected(page, 'Load Source Rows', 'DeepEval Trigger', 'DeepEval Trigger');
-    await dragConnect(page, 'Load Source Rows', 'DeepEval Trigger');
+    await zoomToFit(page);
+    await addDataTableFrom(page, 'When clicking Execute Workflow', 'Load Cases', 'Get row(s)');
+    await dragConnect(page, 'When clicking Execute Workflow', 'Load Cases');
+    await showNode(page, 'Load Cases', [['dataTableId', SOURCE_TABLE_NAME]]);
+    await addConnected(page, 'Load Cases', 'DeepEval Trigger', 'DeepEval Trigger');
+    await dragConnect(page, 'Load Cases', 'DeepEval Trigger');
     await showNode(page, 'DeepEval Trigger', [
       ['runName', WORKFLOW_NAME],
-      ['dataTableId', 'DeepEval Source'],
+      ['dataTableId', SOURCE_TABLE_NAME],
       ['columnMapping', COLUMN_MAPPING],
     ]);
     await tidyUp(page);
-    await hold(page, 900);
+    await hold(page, 500);
     markEnd('dt-03-trigger');
 
     markStart('dt-04-metrics');
     await addConnected(page, 'DeepEval Trigger', 'DeepEval G-Eval', 'DeepEval G-Eval');
     await showNode(page, 'DeepEval G-Eval', [
-      ['criteria', 'Determine whether the support answer is correct.'],
+      [
+        'criteria',
+        'The reply apologizes for the duplicate charge and does not promise an immediate refund.',
+      ],
     ]);
     await addConnected(page, 'DeepEval Trigger', 'DeepEval Bias', 'DeepEval Bias');
     await showNode(page, 'DeepEval Bias');
     await dragConnectAiModel(page, 'OpenAI Chat Model', 'DeepEval G-Eval');
     await dragConnectAiModel(page, 'OpenAI Chat Model', 'DeepEval Bias');
     await tidyUp(page);
-    await hold(page, 1_000);
+    await hold(page, 500);
     markEnd('dt-04-metrics');
 
     markStart('dt-05-persist');
@@ -282,15 +359,24 @@ async function record(session: N8nSession, browser: Browser): Promise<string> {
       throw new Error('DeepEval Bias did not connect to DeepEval Aggregate');
     }
     await dragConnect(page, 'DeepEval G-Eval', 'DeepEval Aggregate');
+    await addDataTableFrom(page, 'DeepEval Aggregate', 'Persist Results', 'Insert row');
+    const persistConnected = await dragConnect(page, 'DeepEval Aggregate', 'Persist Results');
+    if (!persistConnected) {
+      await dumpDebug(page, 'dt-05-persist-not-connected');
+      throw new Error('DeepEval Aggregate did not connect to Persist Results');
+    }
+    await showNode(page, 'Persist Results', [['dataTableId', RESULTS_TABLE_NAME]]);
+    await showNode(page, 'DeepEval Aggregate', [['dataTableId', RESULTS_TABLE_NAME]]);
     await tidyUp(page);
     await parkMouse(page);
-    await hold(page, 2_800);
-    await showNode(page, 'DeepEval Aggregate', [['dataTableId', 'DeepEval Results']]);
-    await dragConnect(page, 'DeepEval Aggregate', 'Persist Results');
+    await page.keyboard.press('Control+s').catch(() => undefined);
+    await hold(page, 1_200);
+    await configureEvalNodes(n8n, created.id);
+    await openWorkflowEditor(page, n8n.baseUrl, created.id);
     await tidyUp(page);
     await showNode(page, 'Persist Results');
     await parkMouse(page);
-    await hold(page, 1_400);
+    await hold(page, 500);
     markEnd('dt-05-persist');
 
     markStart('dt-06-execute');
@@ -301,7 +387,7 @@ async function record(session: N8nSession, browser: Browser): Promise<string> {
         body: JSON.stringify({}),
       });
     }
-    await hold(page, 2_500);
+    await hold(page, 1_500);
     const uiSuccess = await waitForNodeSuccess(page, 'DeepEval G-Eval', EXECUTE_TIMEOUT_MS);
     const persistOk = uiSuccess ? await waitForNodeSuccess(page, 'Persist Results', 60_000) : false;
     const apiSuccess = uiSuccess || (await waitForExecution(n8n, created.id, 20_000));
@@ -311,32 +397,32 @@ async function record(session: N8nSession, browser: Browser): Promise<string> {
     );
     if (!uiSuccess) await dumpDebug(page, 'dt-06-execute-no-geval-success');
     if (!wroteRow) await dumpDebug(page, 'dt-06-execute-no-results-row');
-    await hold(page, 1_200);
+    await hold(page, 600);
     await showNode(page, 'DeepEval G-Eval');
     await openOutputPanel(page);
-    await hold(page, 3_500);
+    await hold(page, 1_800);
     await closeNDV(page);
-    await hold(page, 1_200);
+    await hold(page, 400);
     markEnd('dt-06-execute');
 
     await openProjectDataTables(page, n8n.baseUrl, n8n.projectId);
-    await hold(page, 500);
+    await hold(page, 300);
 
     markStart('dt-07-results');
-    const resultsList = page.getByText('DeepEval Results', { exact: true }).first();
+    const resultsList = page.getByText(RESULTS_TABLE_NAME, { exact: true }).first();
     if ((await resultsList.count()) > 0) {
       await resultsList.hover().catch(() => undefined);
-      await hold(page, 900);
+      await hold(page, 400);
     }
     await openNamedDataTable(
       page,
       n8n.baseUrl,
       n8n.projectId,
       n8n.resultsTableId,
-      'DeepEval Results',
+      RESULTS_TABLE_NAME,
     );
     await tourDataTableGrid(page);
-    await hold(page, 2_200);
+    await hold(page, 700);
     markEnd('dt-07-results');
 
     await seedDashboardData(n8n, created.id).catch((error: unknown) => {
@@ -347,7 +433,7 @@ async function record(session: N8nSession, browser: Browser): Promise<string> {
     await openWorkflowEditor(page, n8n.baseUrl, created.id);
     await dismissModals(page);
     await takeWriteLock(page);
-    await hold(page, 800);
+    await hold(page, 400);
 
     markStart('dt-08-dashboard');
     const opened = await openBenchmarksTab(page);
@@ -366,15 +452,15 @@ async function record(session: N8nSession, browser: Browser): Promise<string> {
     } catch {
       await dumpDebug(page, 'dt-08-dashboard-no-iframe');
     }
-    await hold(page, 4_000);
+    await hold(page, 2_200);
     const score = iframe.locator('[data-testid="dashboard-overall-score"]');
-    if ((await score.count()) > 0) await hold(page, 2_500);
+    if ((await score.count()) > 0) await hold(page, 1_200);
     const metrics = iframe.locator('[data-testid="dashboard-metrics"]');
     if ((await metrics.count()) > 0) {
       await metrics.first().scrollIntoViewIfNeeded();
-      await hold(page, 3_500);
+      await hold(page, 1_600);
     }
-    await hold(page, 1_000);
+    await hold(page, 400);
     markEnd('dt-08-dashboard');
   } catch (error) {
     await dumpDebug(page, 'record-error').catch(() => undefined);
