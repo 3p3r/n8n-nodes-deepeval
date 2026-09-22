@@ -5,8 +5,10 @@ Aggregate, and DeepEval Consistency.
 
 - [n8n-nodes-deepeval](#n8n-nodes-deepeval)
   - [Synopsis](#synopsis)
+    - [Demos](#demos)
     - [Install](#install)
   - [Architecture](#architecture)
+    - [Pyodide isolation](#pyodide-isolation)
     - [Required N8N Nodes](#required-n8n-nodes)
     - [Dashboard](#dashboard)
       - [Enable hooks](#enable-hooks)
@@ -72,6 +74,16 @@ category and are searchable with the `DeepEval Benchmarking` alias.
 
 The package ships DeepEval n8n nodes plus an ABC dashboard (hooks + UI) under
 `dashboard/`. Google Sheets and Microsoft Excel adapters remain deferred.
+
+### Demos
+
+Add the nodes to a workflow that is already built.
+
+<video src="docs/existing.min.mp4" controls width="100%"></video>
+
+Start from an empty canvas and assemble the benchmark there.
+
+<video src="docs/scratch.min.mp4" controls width="100%"></video>
 
 ### Install
 
